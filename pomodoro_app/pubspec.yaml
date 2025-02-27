@@ -1,0 +1,82 @@
+name: pomodoro_app
+description: ポモドーロタイマーと学習管理アプリ
+
+# アプリのバージョン
+version: 1.0.0+1
+
+environment:
+  sdk: ">=2.17.0 <3.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # UI関連
+  cupertino_icons: ^1.0.5
+  fl_chart: ^0.55.0
+  percent_indicator: ^4.2.2
+  
+  # 状態管理
+  provider: ^6.0.3
+  
+  # データベース
+  sqflite: ^2.0.3
+  path: ^1.8.1
+  shared_preferences: ^2.0.15
+  
+  # Windows機能アクセス
+  win32: ^3.0.0
+  ffi: ^2.0.1
+  
+  # その他のユーティリティ
+  intl: ^0.17.0
+  url_launcher: ^6.1.5
+  file_picker: ^5.0.1
+  http: ^0.13.5
+  flutter_local_notifications: ^9.7.0
+  
+  # OSプラットフォーム検出
+  platform: ^3.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.1
+  
+  # アプリアイコン生成
+  flutter_launcher_icons: ^0.10.0
+  
+  # スプラッシュスクリーン生成
+  flutter_native_splash: ^2.2.8
+
+# アプリアイコン設定
+flutter_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/icon/icon.png"
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/icon/icon_foreground.png"
+
+# スプラッシュスクリーン設定
+flutter_native_splash:
+  color: "#FFFFFF"
+  image: "assets/icon/splash.png"
+  android: true
+  ios: true
+
+flutter:
+  uses-material-design: true
+  
+  # アセットファイル
+  assets:
+    - assets/images/
+    - assets/icon/
+    - assets/sounds/
+  
+  # フォント設定
+  fonts:
+    - family: NotoSansJP
+      fonts:
+        - asset: assets/fonts/NotoSansJP-Regular.otf
+        - asset: assets/fonts/NotoSansJP-Bold.otf
+          weight: 700
