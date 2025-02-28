@@ -1,6 +1,6 @@
-# pomodoro_app
+# 部分禁欲ポモロード
+ポモドーロタイマーで自分の作業時間を管理して、自分の作業時間に応じてゲームなどの利用時間を制御できます。徹底的に勉強するぞ
 
-A new Flutter project.
 
 ## Getting Started
 
