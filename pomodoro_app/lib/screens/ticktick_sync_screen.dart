@@ -102,7 +102,7 @@ class _TickTickSyncScreenState extends State<TickTickSyncScreen> {
                   children: [
                     Text(
                       'TickTick連携状態',
-                      style: Theme.of(context).textTheme.headline6,
+                      style: Theme.of(context).textTheme.titleLarge,
                     ),
                     const SizedBox(height: 8),
                     Row(
@@ -131,7 +131,7 @@ class _TickTickSyncScreenState extends State<TickTickSyncScreen> {
                       const SizedBox(height: 8),
                       Text(
                         '最終同期: ${_formatDateTime(tickTickProvider.lastSyncTime!)}',
-                        style: Theme.of(context).textTheme.caption,
+                        style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ],
                   ],
@@ -142,7 +142,7 @@ class _TickTickSyncScreenState extends State<TickTickSyncScreen> {
             if (!tickTickProvider.isAuthenticated) ...[
               Text(
                 'TickTickと連携する',
-                style: Theme.of(context).textTheme.headline6,
+                style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 16),
               ElevatedButton.icon(
@@ -189,7 +189,7 @@ class _TickTickSyncScreenState extends State<TickTickSyncScreen> {
             ] else ...[
               Text(
                 'TickTickからタスクをインポート',
-                style: Theme.of(context).textTheme.headline6,
+                style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 16),
               ElevatedButton.icon(
@@ -204,7 +204,7 @@ class _TickTickSyncScreenState extends State<TickTickSyncScreen> {
               const SizedBox(height: 24),
               Text(
                 '同期設定',
-                style: Theme.of(context).textTheme.headline6,
+                style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 16),
               SwitchListTile(

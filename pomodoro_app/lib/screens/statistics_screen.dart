@@ -161,7 +161,7 @@ class DailyStatisticsTab extends StatelessWidget {
                       children: [
                         Text(
                           '日別ポモドーロ完了数',
-                          style: Theme.of(context).textTheme.headline6,
+                          style: Theme.of(context).textTheme.titleLarge,
                         ),
                         const SizedBox(height: 16),
                         Expanded(
@@ -264,7 +264,7 @@ class DailyStatisticsTab extends StatelessWidget {
                     children: [
                       Text(
                         '詳細データ',
-                        style: Theme.of(context).textTheme.subtitle1,
+                        style: Theme.of(context).textTheme.titleMedium,
                       ),
                       const SizedBox(height: 8),
                       SingleChildScrollView(
@@ -309,11 +309,11 @@ class DailyStatisticsTab extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           value,
-          style: Theme.of(context).textTheme.headline6,
+          style: Theme.of(context).textTheme.titleLarge,
         ),
         Text(
           label,
-          style: Theme.of(context).textTheme.caption,
+          style: Theme.of(context).textTheme.bodySmall,
         ),
       ],
     );
@@ -438,7 +438,7 @@ class WeeklyStatisticsTab extends StatelessWidget {
                       children: [
                         Text(
                           '週別ポモドーロ完了数',
-                          style: Theme.of(context).textTheme.headline6,
+                          style: Theme.of(context).textTheme.titleLarge,
                         ),
                         const SizedBox(height: 16),
                         Expanded(
@@ -539,7 +539,7 @@ class WeeklyStatisticsTab extends StatelessWidget {
                     children: [
                       Text(
                         '詳細データ',
-                        style: Theme.of(context).textTheme.subtitle1,
+                        style: Theme.of(context).textTheme.titleMedium,
                       ),
                       const SizedBox(height: 8),
                       SingleChildScrollView(
@@ -596,11 +596,11 @@ class WeeklyStatisticsTab extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           value,
-          style: Theme.of(context).textTheme.headline6,
+          style: Theme.of(context).textTheme.titleLarge,
         ),
         Text(
           label,
-          style: Theme.of(context).textTheme.caption,
+          style: Theme.of(context).textTheme.bodySmall,
         ),
       ],
     );
@@ -673,7 +673,7 @@ class TaskStatisticsTab extends StatelessWidget {
                         children: [
                           Text(
                             'カテゴリ別学習時間',
-                            style: Theme.of(context).textTheme.headline6,
+                            style: Theme.of(context).textTheme.titleLarge,
                           ),
                           const SizedBox(height: 16),
                           SizedBox(
@@ -707,7 +707,7 @@ class TaskStatisticsTab extends StatelessWidget {
                           children: [
                             Text(
                               'タスク別詳細',
-                              style: Theme.of(context).textTheme.subtitle1,
+                              style: Theme.of(context).textTheme.titleMedium,
                             ),
                             const SizedBox(height: 8),
                             Expanded(
@@ -830,7 +830,7 @@ class CalendarStatisticsTab extends StatelessWidget {
               // ヒートマップカレンダー
               Text(
                 'ポモドーロ達成カレンダー',
-                style: Theme.of(context).textTheme.headline6,
+                style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 16),
               Expanded(
@@ -875,7 +875,7 @@ class CalendarStatisticsTab extends StatelessWidget {
                     children: [
                       Text(
                         '達成記録',
-                        style: Theme.of(context).textTheme.subtitle1,
+                        style: Theme.of(context).textTheme.titleMedium,
                       ),
                       const SizedBox(height: 8),
                       _buildStreakSummary(context, dailyCounts),
@@ -1052,14 +1052,14 @@ class CalendarStatisticsTab extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           value,
-          style: Theme.of(context).textTheme.headline6?.copyWith(
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
                 color: color,
                 fontWeight: FontWeight.bold,
               ),
         ),
         Text(
           label,
-          style: Theme.of(context).textTheme.caption,
+          style: Theme.of(context).textTheme.bodySmall,
         ),
       ],
     );

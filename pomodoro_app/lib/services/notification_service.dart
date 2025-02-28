@@ -1,4 +1,6 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:timezone/timezone.dart' as tz;
+import 'package:timezone/data/latest.dart' as tz;
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
@@ -71,6 +73,11 @@ class NotificationService {
     String body,
     DateTime scheduledTime,
   ) async {
+    tz.initializeTimeZones();
+    final tz.TZDateTime tzScheduledTime = tz.TZDateTime.from(
+      scheduledTime,
+      tz.local,
+    );
     const AndroidNotificationDetails androidPlatformChannelSpecifics =
         AndroidNotificationDetails(
       'pomodoro_scheduled_channel',
@@ -92,7 +99,7 @@ class NotificationService {
       id,
       title,
       body,
-      scheduledTime,
+      tzScheduledTime,
       platformChannelSpecifics,
       androidAllowWhileIdle: true,
       uiLocalNotificationDateInterpretation:

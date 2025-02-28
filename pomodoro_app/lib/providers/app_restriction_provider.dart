@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import '../models/restricted_app.dart';
 import '../services/database_helper.dart';
-import 'windows_app_controller.dart';
+import '../windows_app_controller.dart';
 
 class AppRestrictionProvider with ChangeNotifier {
   final _windowsAppController = WindowsAppController();
@@ -62,13 +62,13 @@ class AppRestrictionProvider with ChangeNotifier {
     final db = await DatabaseHelper.instance.database;
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day).toIso8601String();
-    
+
     final results = await db.rawQuery('''
       SELECT COUNT(*) as count
       FROM pomodoro_sessions
       WHERE date(startTime) = date(?) AND completed = 1
     ''', [today]);
-    
+
     if (results.isNotEmpty) {
       final count = results.first['count'] as int;
       await _windowsAppController.updateCompletedPomodoros(count);

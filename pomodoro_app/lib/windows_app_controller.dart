@@ -3,8 +3,8 @@ import 'dart:ffi';
 import 'dart:io';
 import 'package:ffi/ffi.dart';
 import 'package:win32/win32.dart';
-import '../models/restricted_app.dart';
-import '../services/database_helper.dart';
+import 'models/restricted_app.dart';
+import 'services/database_helper.dart';
 
 class WindowsAppController {
   static final WindowsAppController _instance =
@@ -101,7 +101,7 @@ class WindowsAppController {
     final processes = <ProcessInfo>[];
 
     // スナップショットを取得
-    final hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    final hSnapshot = createToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
 
     if (hSnapshot == INVALID_HANDLE_VALUE) {
       return processes;

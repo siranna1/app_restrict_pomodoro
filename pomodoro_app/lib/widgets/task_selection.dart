@@ -40,7 +40,7 @@ class _TaskSelectionState extends State<TaskSelection> {
           children: [
             Text(
               'タスクを選択',
-              style: Theme.of(context).textTheme.headline6,
+              style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 8),
 

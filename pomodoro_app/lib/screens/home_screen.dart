@@ -57,17 +57,17 @@ class HomeScreen extends StatelessWidget {
                       children: [
                         Text(
                           '現在のタスク:',
-                          style: Theme.of(context).textTheme.subtitle1,
+                          style: Theme.of(context).textTheme.displayMedium,
                         ),
                         const SizedBox(height: 8),
                         Text(
                           pomodoroProvider.currentTask?.name ?? '選択されていません',
-                          style: Theme.of(context).textTheme.headline6,
+                          style: Theme.of(context).textTheme.displayLarge,
                         ),
                         const SizedBox(height: 4),
                         Text(
                           '${pomodoroProvider.currentTask?.completedPomodoros ?? 0} / ${pomodoroProvider.currentTask?.estimatedPomodoros ?? 0} ポモドーロ',
-                          style: Theme.of(context).textTheme.subtitle2,
+                          style: Theme.of(context).textTheme.headlineSmall,
                         ),
                       ],
                     ),
