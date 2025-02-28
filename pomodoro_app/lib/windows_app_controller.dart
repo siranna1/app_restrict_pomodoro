@@ -101,7 +101,7 @@ class WindowsAppController {
     final processes = <ProcessInfo>[];
 
     // スナップショットを取得
-    final hSnapshot = createToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    final hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
 
     if (hSnapshot == INVALID_HANDLE_VALUE) {
       return processes;
