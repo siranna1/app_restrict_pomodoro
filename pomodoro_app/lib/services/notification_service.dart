@@ -3,67 +3,99 @@ import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz;
 
 class NotificationService {
-  static final NotificationService _instance = NotificationService._internal();
-  factory NotificationService() => _instance;
+  // 静的インスタンスの管理方法を変更
+  static NotificationService? _instance;
 
+  // ファクトリーメソッドを使ってインスタンスを安全に取得
+  factory NotificationService() {
+    _instance ??= NotificationService._internal();
+    return _instance!;
+  }
   NotificationService._internal();
 
   final FlutterLocalNotificationsPlugin _flutterLocalNotificationsPlugin =
       FlutterLocalNotificationsPlugin();
+  bool _isInitialized = false;
 
   // 通知初期化
   Future<void> init() async {
-    const AndroidInitializationSettings initializationSettingsAndroid =
-        AndroidInitializationSettings('@mipmap/launcher_icon');
+    if (_isInitialized) return;
+    try {
+      const AndroidInitializationSettings initializationSettingsAndroid =
+          AndroidInitializationSettings('@mipmap/launcher_icon');
 
-    const IOSInitializationSettings initializationSettingsIOS =
-        IOSInitializationSettings(
-      requestAlertPermission: true,
-      requestBadgePermission: true,
-      requestSoundPermission: true,
-    );
+      const IOSInitializationSettings initializationSettingsIOS =
+          IOSInitializationSettings(
+        requestAlertPermission: true,
+        requestBadgePermission: true,
+        requestSoundPermission: true,
+      );
 
-    const InitializationSettings initializationSettings =
-        InitializationSettings(
-      android: initializationSettingsAndroid,
-      iOS: initializationSettingsIOS,
-    );
+      const InitializationSettings initializationSettings =
+          InitializationSettings(
+        android: initializationSettingsAndroid,
+        iOS: initializationSettingsIOS,
+      );
 
-    await _flutterLocalNotificationsPlugin.initialize(
-      initializationSettings,
-    );
+      await _flutterLocalNotificationsPlugin.initialize(
+        initializationSettings,
+      );
+
+      _isInitialized = true;
+      print('通知サービスが初期化されました');
+    } catch (e) {
+      print('通知サービスの初期化に失敗しました: $e');
+    }
   }
 
-  // 通知を表示
+  // 通知を表示 - エラーハンドリングを強化
   Future<void> showNotification(String title, String body) async {
-    const AndroidNotificationDetails androidPlatformChannelSpecifics =
-        AndroidNotificationDetails(
-      'pomodoro_channel',
-      'ポモドーロ通知',
-      channelDescription: 'ポモドーロタイマーの通知チャンネル',
-      importance: Importance.max,
-      priority: Priority.high,
-      showWhen: true,
-    );
+    try {
+      // 初期化されていない場合は初期化を試みる
+      if (!_isInitialized) {
+        print('通知サービスが初期化されていないため、初期化を試みます');
+        await init();
+      }
 
-    const IOSNotificationDetails iOSPlatformChannelSpecifics =
-        IOSNotificationDetails(
-      presentAlert: true,
-      presentBadge: true,
-      presentSound: true,
-    );
+      // それでも初期化されていない場合はログだけ出して終了
+      if (!_isInitialized) {
+        print('通知サービスの初期化に失敗したため、通知を表示できません');
+        return;
+      }
 
-    const NotificationDetails platformChannelSpecifics = NotificationDetails(
-      android: androidPlatformChannelSpecifics,
-      iOS: iOSPlatformChannelSpecifics,
-    );
+      const AndroidNotificationDetails androidPlatformChannelSpecifics =
+          AndroidNotificationDetails(
+        'pomodoro_channel',
+        'ポモドーロ通知',
+        channelDescription: 'ポモドーロタイマーの通知チャンネル',
+        importance: Importance.max,
+        priority: Priority.high,
+        showWhen: true,
+      );
 
-    await _flutterLocalNotificationsPlugin.show(
-      0,
-      title,
-      body,
-      platformChannelSpecifics,
-    );
+      const IOSNotificationDetails iOSPlatformChannelSpecifics =
+          IOSNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      );
+
+      const NotificationDetails platformChannelSpecifics = NotificationDetails(
+        android: androidPlatformChannelSpecifics,
+        iOS: iOSPlatformChannelSpecifics,
+      );
+
+      await _flutterLocalNotificationsPlugin.show(
+        0,
+        title,
+        body,
+        platformChannelSpecifics,
+      );
+
+      print('通知を表示しました: $title');
+    } catch (e) {
+      print('通知の表示中にエラーが発生しました: $e');
+    }
   }
 
   // 予定通知を設定

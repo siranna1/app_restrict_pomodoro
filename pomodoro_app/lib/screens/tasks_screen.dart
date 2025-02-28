@@ -333,121 +333,86 @@ class _TasksScreenState extends State<TasksScreen> {
     return showDialog(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: const Text('新しいタスクを追加'),
-          content: Form(
-            key: formKey,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextFormField(
-                    decoration: const InputDecoration(
-                      labelText: 'タスク名',
-                      hintText: '例: 数学の演習問題を解く',
-                    ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'タスク名を入力してください';
-                      }
-                      return null;
-                    },
-                    onSaved: (value) {
-                      name = value!;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    decoration: const InputDecoration(
-                      labelText: 'カテゴリー',
-                      hintText: '例: 数学、英語、プログラミング',
-                    ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'カテゴリーを入力してください';
-                      }
-                      return null;
-                    },
-                    onSaved: (value) {
-                      category = value!;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    decoration: const InputDecoration(
-                      labelText: '説明（任意）',
-                      hintText: '例: 教科書p.45-50の問題',
-                    ),
-                    maxLines: 2,
-                    onSaved: (value) {
-                      description = value ?? '';
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      const Expanded(
-                        child: Text('予定ポモドーロ数'),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.remove),
-                        onPressed: () {
-                          if (estimatedPomodoros > 1) {
+        return StatefulBuilder(// StatefulBuilder を追加
+            builder: (context, setState) {
+          return AlertDialog(
+            title: const Text('新しいタスクを追加'),
+            content: Form(
+              key: formKey,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // 既存のフォームフィールド...
+
+                    // 予定ポモドーロ数の部分を修正
+                    Row(
+                      children: [
+                        const Expanded(
+                          child: Text('予定ポモドーロ数'),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.remove),
+                          onPressed: () {
+                            if (estimatedPomodoros > 1) {
+                              setState(() {
+                                // StatefulBuilder の setState を使用
+                                estimatedPomodoros--;
+                              });
+                            }
+                          },
+                        ),
+                        Text(
+                          '$estimatedPomodoros',
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.add),
+                          onPressed: () {
                             setState(() {
-                              estimatedPomodoros--;
+                              // StatefulBuilder の setState を使用
+                              estimatedPomodoros++;
                             });
-                          }
-                        },
-                      ),
-                      Text(
-                        '$estimatedPomodoros',
-                        style: const TextStyle(fontSize: 16),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.add),
-                        onPressed: () {
-                          setState(() {
-                            estimatedPomodoros++;
-                          });
-                        },
-                      ),
-                    ],
-                  ),
-                ],
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-          actions: [
-            TextButton(
-              child: const Text('キャンセル'),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-            ),
-            ElevatedButton(
-              child: const Text('追加'),
-              onPressed: () {
-                if (formKey.currentState!.validate()) {
-                  formKey.currentState!.save();
-
-                  final taskProvider =
-                      Provider.of<TaskProvider>(context, listen: false);
-
-                  final newTask = Task(
-                    name: name,
-                    category: category,
-                    description: description,
-                    estimatedPomodoros: estimatedPomodoros,
-                  );
-
-                  taskProvider.addTask(newTask);
-
+            actions: [
+              TextButton(
+                child: const Text('キャンセル'),
+                onPressed: () {
                   Navigator.of(context).pop();
-                }
-              },
-            ),
-          ],
-        );
+                },
+              ),
+              ElevatedButton(
+                child: const Text('追加'),
+                onPressed: () {
+                  if (formKey.currentState!.validate()) {
+                    formKey.currentState!.save();
+
+                    final taskProvider =
+                        Provider.of<TaskProvider>(context, listen: false);
+
+                    final newTask = Task(
+                      name: name,
+                      category: category,
+                      description: description,
+                      estimatedPomodoros: estimatedPomodoros,
+                    );
+
+                    taskProvider.addTask(newTask);
+
+                    Navigator.of(context).pop();
+                  }
+                },
+              ),
+            ],
+          );
+        });
       },
     );
   }
@@ -463,133 +428,137 @@ class _TasksScreenState extends State<TasksScreen> {
     return showDialog(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: const Text('タスクを編集'),
-          content: Form(
-            key: formKey,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextFormField(
-                    decoration: const InputDecoration(
-                      labelText: 'タスク名',
-                    ),
-                    initialValue: name,
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'タスク名を入力してください';
-                      }
-                      return null;
-                    },
-                    onSaved: (value) {
-                      name = value!;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    decoration: const InputDecoration(
-                      labelText: 'カテゴリー',
-                    ),
-                    initialValue: category,
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'カテゴリーを入力してください';
-                      }
-                      return null;
-                    },
-                    onSaved: (value) {
-                      category = value!;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    decoration: const InputDecoration(
-                      labelText: '説明（任意）',
-                    ),
-                    initialValue: description,
-                    maxLines: 2,
-                    onSaved: (value) {
-                      description = value ?? '';
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: const Text('タスクを編集'),
+              content: Form(
+                key: formKey,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Expanded(
-                        child: Text('予定ポモドーロ数'),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.remove),
-                        onPressed: () {
-                          if (estimatedPomodoros > 1) {
-                            setState(() {
-                              estimatedPomodoros--;
-                            });
+                      TextFormField(
+                        decoration: const InputDecoration(
+                          labelText: 'タスク名',
+                        ),
+                        initialValue: name,
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'タスク名を入力してください';
                           }
+                          return null;
+                        },
+                        onSaved: (value) {
+                          name = value!;
                         },
                       ),
-                      Text(
-                        '$estimatedPomodoros',
-                        style: const TextStyle(fontSize: 16),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.add),
-                        onPressed: () {
-                          setState(() {
-                            estimatedPomodoros++;
-                          });
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        decoration: const InputDecoration(
+                          labelText: 'カテゴリー',
+                        ),
+                        initialValue: category,
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'カテゴリーを入力してください';
+                          }
+                          return null;
                         },
+                        onSaved: (value) {
+                          category = value!;
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        decoration: const InputDecoration(
+                          labelText: '説明（任意）',
+                        ),
+                        initialValue: description,
+                        maxLines: 2,
+                        onSaved: (value) {
+                          description = value ?? '';
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          const Expanded(
+                            child: Text('予定ポモドーロ数'),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.remove),
+                            onPressed: () {
+                              if (estimatedPomodoros > 1) {
+                                setState(() {
+                                  estimatedPomodoros--;
+                                });
+                              }
+                            },
+                          ),
+                          Text(
+                            '$estimatedPomodoros',
+                            style: const TextStyle(fontSize: 16),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.add),
+                            onPressed: () {
+                              setState(() {
+                                estimatedPomodoros++;
+                              });
+                            },
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
+                ),
               ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              child: const Text('キャンセル'),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-            ),
-            TextButton(
-              child: const Text('削除'),
-              style: TextButton.styleFrom(
-                foregroundColor: Colors.red,
-              ),
-              onPressed: () {
-                final taskProvider =
-                    Provider.of<TaskProvider>(context, listen: false);
-                taskProvider.deleteTask(task.id!);
-                Navigator.of(context).pop();
-              },
-            ),
-            ElevatedButton(
-              child: const Text('保存'),
-              onPressed: () {
-                if (formKey.currentState!.validate()) {
-                  formKey.currentState!.save();
+              actions: [
+                TextButton(
+                  child: const Text('キャンセル'),
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  },
+                ),
+                TextButton(
+                  child: const Text('削除'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.red,
+                  ),
+                  onPressed: () {
+                    final taskProvider =
+                        Provider.of<TaskProvider>(context, listen: false);
+                    taskProvider.deleteTask(task.id!);
+                    Navigator.of(context).pop();
+                  },
+                ),
+                ElevatedButton(
+                  child: const Text('保存'),
+                  onPressed: () {
+                    if (formKey.currentState!.validate()) {
+                      formKey.currentState!.save();
 
-                  final taskProvider =
-                      Provider.of<TaskProvider>(context, listen: false);
+                      final taskProvider =
+                          Provider.of<TaskProvider>(context, listen: false);
 
-                  final updatedTask = task.copyWith(
-                    name: name,
-                    category: category,
-                    description: description,
-                    estimatedPomodoros: estimatedPomodoros,
-                    updatedAt: DateTime.now(),
-                  );
+                      final updatedTask = task.copyWith(
+                        name: name,
+                        category: category,
+                        description: description,
+                        estimatedPomodoros: estimatedPomodoros,
+                        updatedAt: DateTime.now(),
+                      );
 
-                  taskProvider.updateTask(updatedTask);
+                      taskProvider.updateTask(updatedTask);
 
-                  Navigator.of(context).pop();
-                }
-              },
-            ),
-          ],
+                      Navigator.of(context).pop();
+                    }
+                  },
+                ),
+              ],
+            );
+          },
         );
       },
     );

@@ -17,10 +17,20 @@ import 'utils/platform_utils.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // データベースファクトリの初期化（追加）
+  // データベースファクトリの初期化
   await DatabaseHelper.instance.initDatabaseFactory();
   await DatabaseHelper.instance.database;
-  await NotificationService().init();
+
+  // 通知サービスの初期化 - 変数に保存して確認
+  final notificationService = NotificationService();
+  bool initSuccess = false;
+  try {
+    await notificationService.init();
+    initSuccess = true;
+    print('通知サービスの初期化に成功しました');
+  } catch (e) {
+    print('通知サービスの初期化に失敗しました: $e');
+  }
 
   // プラットフォーム固有の設定初期化
   final platformService = PlatformUtils().getPlatformService();
@@ -38,10 +48,13 @@ void main() async {
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => TaskProvider()),
-        ChangeNotifierProvider(create: (_) => PomodoroProvider(prefs)),
+        //ChangeNotifierProvider(create: (_) => PomodoroProvider(prefs)),
         ChangeNotifierProvider(create: (_) => AppRestrictionProvider()),
         ChangeNotifierProvider(create: (_) => TickTickProvider()),
         ChangeNotifierProvider(create: (_) => ThemeProvider(prefs)),
+        ChangeNotifierProvider(
+            create: (_) =>
+                PomodoroProvider(prefs, notificationInitialized: initSuccess)),
       ],
       child: const MyApp(),
     ),

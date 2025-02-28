@@ -31,13 +31,21 @@ class PomodoroProvider with ChangeNotifier {
 
   final SharedPreferences prefs;
   final notificationService = NotificationService();
+  final bool notificationInitialized;
 
-  PomodoroProvider(this.prefs) {
+  PomodoroProvider(this.prefs, {this.notificationInitialized = false}) {
     // 設定の読み込み
     workDuration = prefs.getInt('workDuration') ?? 25;
     shortBreakDuration = prefs.getInt('shortBreakDuration') ?? 5;
     longBreakDuration = prefs.getInt('longBreakDuration') ?? 15;
     longBreakInterval = prefs.getInt('longBreakInterval') ?? 4;
+
+    // 通知サービスがまだ初期化されていなければ初期化
+    if (!notificationInitialized) {
+      notificationService.init().catchError((e) {
+        print('PomodoroProviderでの通知サービス初期化エラー: $e');
+      });
+    }
   }
 
   // タイマーを開始
@@ -85,7 +93,7 @@ class PomodoroProvider with ChangeNotifier {
         if (!isBreak) {
           // ポモドーロが完了
           _completePomodoro();
-          notificationService.showNotification(
+          _tryShowNotification(
             'ポモドーロ完了',
             '休憩時間です。次のセッションを始める準備をしましょう。',
           );
@@ -93,7 +101,7 @@ class PomodoroProvider with ChangeNotifier {
           // 休憩が完了
           isBreak = false;
           isRunning = false;
-          notificationService.showNotification('休憩終了', '次のポモドーロセッションを始めましょう。');
+          _tryShowNotification('休憩終了', '次のポモドーロセッションを始めましょう。');
         }
 
         notifyListeners();
@@ -107,26 +115,41 @@ class PomodoroProvider with ChangeNotifier {
 
     completedPomodoros++;
 
-    // セッションを記録
-    final session = PomodoroSession(
-      taskId: currentTask!.id!,
-      startTime: sessionStartTime!,
-      endTime: DateTime.now(),
-      durationMinutes: workDuration,
-      completed: true,
-      focusScore: _calculateFocusScore(),
-    );
+    try {
+      // セッションを記録
+      final session = PomodoroSession(
+        taskId: currentTask!.id ?? -1, // ID が null の場合の対策
+        startTime: sessionStartTime!,
+        endTime: DateTime.now(),
+        durationMinutes: workDuration,
+        completed: true,
+        focusScore: _calculateFocusScore(),
+      );
 
-    // データベースに保存
-    await DatabaseHelper.instance.insertPomodoroSession(session);
+      // タスク ID が有効な場合のみデータベースに保存
+      if (currentTask!.id != null) {
+        await DatabaseHelper.instance.insertPomodoroSession(session);
 
-    // タスクの完了ポモドーロ数を更新
-    currentTask = currentTask!.copyWith(
-      completedPomodoros: currentTask!.completedPomodoros + 1,
-      updatedAt: DateTime.now(),
-    );
+        // タスクの完了ポモドーロ数を更新
+        currentTask = currentTask!.copyWith(
+          completedPomodoros: currentTask!.completedPomodoros + 1,
+          updatedAt: DateTime.now(),
+        );
 
-    await DatabaseHelper.instance.updateTask(currentTask!);
+        await DatabaseHelper.instance.updateTask(currentTask!);
+      }
+    } catch (e) {
+      print('ポモドーロ完了の記録中にエラーが発生しました: $e');
+    }
+  }
+
+  // 通知を表示
+  void _showNotification(String title, String body) {
+    try {
+      _tryShowNotification(title, body);
+    } catch (e) {
+      print('通知表示中にエラーが発生しました: $e');
+    }
   }
 
   // 集中度スコアを計算（デモとして単純な実装）
@@ -160,6 +183,17 @@ class PomodoroProvider with ChangeNotifier {
     isRunning = false;
     isPaused = false;
     notifyListeners();
+  }
+
+  // 通知表示を試みる（エラーハンドリング付き）
+  void _tryShowNotification(String title, String body) {
+    try {
+      notificationService.showNotification(title, body).catchError((e) {
+        print('通知表示エラー: $e');
+      });
+    } catch (e) {
+      print('通知表示中に例外が発生しました: $e');
+    }
   }
 
   // 設定を保存
