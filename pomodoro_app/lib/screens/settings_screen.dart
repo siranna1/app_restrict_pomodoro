@@ -129,6 +129,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
 
+          // ListTile(
+          //   title: const Text('1日の目標ポモドーロ数'),
+          //   subtitle: Text('$_dailyTargetPomodoros 回'),
+          //   trailing: Row(
+          //     mainAxisSize: MainAxisSize.min,
+          //     children: [
+          //       IconButton(
+          //         icon: const Icon(Icons.remove),
+          //         onPressed: _dailyTargetPomodoros > 1
+          //             ? () => setState(() => _dailyTargetPomodoros--)
+          //             : null,
+          //       ),
+          //       IconButton(
+          //         icon: const Icon(Icons.add),
+          //         onPressed: () => setState(() => _dailyTargetPomodoros++),
+          //       ),
+          //     ],
+          //   ),
+          // ),
+
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: ElevatedButton(
@@ -147,6 +167,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
               },
             ),
           ),
+          const Divider(),
+          _buildSectionHeader(context, "アプリ制限"),
+          // Windowsアプリ制限（Windowsプラットフォームのみ表示）
+          if (Theme.of(context).platform == TargetPlatform.windows)
+            ListTile(
+              title: const Text('アプリ制限設定'),
+              subtitle: const Text('ポモドーロ目標達成までアプリの使用を制限します'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.of(context).push(MaterialPageRoute(
+                  builder: (context) => const AppRestrictionScreen(),
+                ));
+              },
+            ),
 
           const Divider(),
 
@@ -227,19 +261,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ));
             },
           ),
-
-          // Windowsアプリ制限（Windowsプラットフォームのみ表示）
-          if (Theme.of(context).platform == TargetPlatform.windows)
-            ListTile(
-              title: const Text('アプリ制限設定'),
-              subtitle: const Text('ポモドーロ目標達成までアプリの使用を制限します'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () {
-                Navigator.of(context).push(MaterialPageRoute(
-                  builder: (context) => const AppRestrictionScreen(),
-                ));
-              },
-            ),
 
           const Divider(),
 

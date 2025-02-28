@@ -47,10 +47,15 @@ class WindowsAppController {
     final today = DateTime(now.year, now.month, now.day).toIso8601String();
 
     final results = await db.rawQuery('''
-      SELECT COUNT(*) as count
+      SELECT 
+        COUNT(*) as count
       FROM pomodoro_sessions
-      WHERE date(startTime) = date(?) AND completed = 1
+      WHERE date(startTime) = date(?)
     ''', [today]);
+    if (results.isNotEmpty) {
+      _completedPomodorosToday = results.first['count'] as int;
+      print('今日のポモドーロ完了数を読み込み: $_completedPomodorosToday');
+    }
 
     if (results.isNotEmpty) {
       _completedPomodorosToday = results.first['count'] as int;
@@ -73,11 +78,21 @@ class WindowsAppController {
   // アプリの監視処理
   Future<void> _monitorApps() async {
     if (!Platform.isWindows) return;
-
+    await _loadCompletedPomodorosToday();
+    int updateCounter = 0;
     while (_isMonitoring) {
+      updateCounter++;
+      // 3回ごと（約15秒）にカウントを更新
+      if (updateCounter >= 3) {
+        await _loadCompletedPomodorosToday();
+        updateCounter = 0;
+        print("定期更新: 現在のポモドーロカウント: $_completedPomodorosToday");
+      }
+
       final runningApps = _getRunningApplications();
 
       for (final app in _restrictedApps) {
+        if (!app.isRestricted) continue;
         final isRunning = runningApps.any((process) =>
             process.executablePath.toLowerCase() ==
             app.executablePath.toLowerCase());
@@ -194,6 +209,10 @@ class WindowsAppController {
   void _showNotification(RestrictedApp app) {
     // トースト通知を表示（実際にはFlutterの通知機能を使用）
     // この例では簡略化のためにコンソール出力のみ
+    // print('アプリ実行中: ${app.name}');
+    // print('制限状態: ${app.isRestricted}');
+    // print('完了ポモドーロ数: $_completedPomodorosToday');
+    // print('必要ポモドーロ数: ${app.requiredPomodorosToUnlock}');
     print('アプリ「${app.name}」はポモドーロ ${app.requiredPomodorosToUnlock} 回の完了が必要です');
   }
 

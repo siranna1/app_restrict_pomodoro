@@ -9,9 +9,19 @@ class AppRestrictionProvider with ChangeNotifier {
   List<RestrictedApp> restrictedApps = [];
   bool isMonitoring = false;
 
+  static AppRestrictionProvider? _instance;
+
   AppRestrictionProvider() {
+    _instance = this; // インスタンスを保存
     _initializeController();
     _loadRestrictedApps();
+  }
+
+  // 静的メソッドを追加
+  static Future<void> notifyPomodoroCompleted() async {
+    if (_instance != null) {
+      await _instance!.onPomodoroCompleted();
+    }
   }
 
   Future<void> _initializeController() async {

@@ -7,6 +7,7 @@ import '../models/pomodoro_session.dart';
 import '../services/database_helper.dart';
 import '../services/notification_service.dart';
 import '../providers/task_provider.dart';
+import 'app_restriction_provider.dart';
 
 class PomodoroProvider with ChangeNotifier {
   // タイマー設定
@@ -190,6 +191,15 @@ class PomodoroProvider with ChangeNotifier {
         // タスクプロバイダーに通知
         if (taskProvider != null && currentTask!.id != null) {
           await taskProvider!.refreshTask(currentTask!.id!);
+        }
+        notifyListeners();
+
+        try {
+          // BuildContextが不要なように、静的メソッドを呼び出す方式に変更
+          await AppRestrictionProvider.notifyPomodoroCompleted();
+          print("ポモドーロ完了を AppRestrictionProvider に通知しました");
+        } catch (e) {
+          print("AppRestrictionProvider 通知エラー: $e");
         }
       }
     } catch (e) {

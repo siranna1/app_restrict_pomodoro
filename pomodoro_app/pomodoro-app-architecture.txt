@@ -1,0 +1,147 @@
+# ポモドーロ学習管理アプリ設計書
+
+## 1. 技術スタック
+
+- **フレームワーク**: Flutter (Dart言語)
+- **データベース**: SQLite (ローカルデータ保存用)
+- **Windowsアプリ制御**: Windows API経由 (win32パッケージ使用)
+- **TickTick連携**: TickTick APIを使用
+- **グラフ表示**: fl_chart パッケージ
+- **状態管理**: Provider / Riverpod
+
+## 2. 主要機能
+
+### ポモドーロタイマー
+- 標準25分作業 / 5分休憩のタイマー
+- カスタマイズ可能な作業・休憩時間設定
+- 通知・アラーム機能
+- バックグラウンド実行サポート
+
+### タスク管理
+- タスク（教材）の追加・編集・削除
+- タスクへのカテゴリ設定（科目・教材種別など）
+- タスクごとのポモドーロセッション記録
+- 進捗状況の視覚化
+
+### 統計・分析
+- 日/週/月ごとの学習時間グラフ表示
+- タスク種別ごとの時間配分分析
+- 目標設定と達成状況の可視化
+- タスクごとの集中度・効率分析
+
+### Windowsアプリ制御
+- 設定した学習目標達成後にのみ特定アプリの使用を許可
+- アプリごとの使用可能時間設定
+- 制限対象アプリのリスト管理
+- 保護者/自己管理パスワード設定
+
+### TickTick連携
+- TickTickからのタスクインポート
+- ポモドーロセッション完了情報のTickTickへの同期
+- TickTickのタスク完了状態との同期
+
+## 3. データモデル
+
+### Taskモデル
+```dart
+class Task {
+  int id;
+  String name;
+  String category;
+  String description;
+  int estimatedPomodoros;
+  int completedPomodoros;
+  DateTime createdAt;
+  DateTime updatedAt;
+  String tickTickId;  // TickTickとの連携用
+}
+```
+
+### PomodoroSessionモデル
+```dart
+class PomodoroSession {
+  int id;
+  int taskId;
+  DateTime startTime;
+  DateTime endTime;
+  int durationMinutes;
+  bool completed;
+  double focusScore;  // オプション: 集中度を0-100で記録
+}
+```
+
+### RestrictedAppモデル
+```dart
+class RestrictedApp {
+  int id;
+  String name;
+  String executablePath;
+  int allowedMinutesPerDay;
+  bool isRestricted;
+  int requiredPomodorosToUnlock;
+}
+```
+
+## 4. 画面設計
+
+1. **ホーム画面**
+   - 現在のポモドーロタイマー
+   - 今日の進捗サマリー
+   - 次のタスクの提案
+
+2. **タスク一覧画面**
+   - タスクのリスト表示
+   - カテゴリ別フィルタリング
+   - タスク追加・編集機能
+
+3. **タイマー実行画面**
+   - 大きなタイマー表示
+   - 現在のタスク情報
+   - 一時停止・キャンセルボタン
+   - 集中モード設定
+
+4. **統計画面**
+   - 期間別グラフ（日/週/月）
+   - カテゴリ別円グラフ
+   - 達成目標との比較
+   - ヒートマップカレンダー
+
+5. **設定画面**
+   - タイマー設定
+   - アプリ制限設定
+   - TickTick連携設定
+   - 通知設定
+
+## 5. Windowsアプリ制限の実装方法
+
+Windowsでのアプリケーション使用制限には、win32パッケージを通じて以下のAPIを利用します：
+
+1. **アプリ実行の監視**
+   - Windows Management Instrumentation (WMI)を使用
+   - 実行中のプロセスリストを定期的に監視
+
+2. **アプリ制限の実施**
+   - 制限対象アプリが起動した際に検知
+   - 条件未達成の場合、`TerminateProcess` APIでアプリを終了
+   - 通知を表示して理由を説明
+
+3. **バックグラウンドサービス**
+   - Windowsのバックグラウンドサービスとして動作
+   - システム起動時に自動実行
+
+## 6. TickTick連携の実装
+
+TickTickのAPIを使用して以下の機能を実装します：
+
+1. **認証**
+   - OAuth2認証フロー
+   - アクセストークンの安全な保存
+
+2. **タスク同期**
+   - TickTickからのタスクフェッチ
+   - 完了したポモドーロセッションの送信
+   - タスクの進捗状況の更新
+
+3. **同期設定**
+   - 同期頻度の設定
+   - 同期するタスクタイプの選択
