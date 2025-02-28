@@ -17,6 +17,8 @@ import 'utils/platform_utils.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // データベースファクトリの初期化（追加）
+  await DatabaseHelper.instance.initDatabaseFactory();
   await DatabaseHelper.instance.database;
   await NotificationService().init();
 

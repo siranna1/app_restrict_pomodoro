@@ -13,7 +13,7 @@ dependencies:
   
   # UI関連
   cupertino_icons: ^1.0.5
-  fl_chart: ^0.55.0
+  fl_chart: ^0.66.0
   percent_indicator: ^4.2.2
   
   # 状態管理
@@ -23,9 +23,10 @@ dependencies:
   sqflite: ^2.0.3
   path: ^1.8.1
   shared_preferences: ^2.0.15
+  sqflite_common_ffi: ^2.0.0  # Windows 対応用
   
   # Windows機能アクセス
-  win32: ^3.0.0
+  win32: ^5.0.0
   ffi: ^2.0.1
   
   # その他のユーティリティ

@@ -4,6 +4,8 @@ import 'package:sqflite/sqflite.dart';
 import '../models/task.dart';
 import '../models/pomodoro_session.dart';
 import '../models/restricted_app.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'dart:io' show Platform;
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
@@ -11,8 +13,23 @@ class DatabaseHelper {
 
   DatabaseHelper._init();
 
+  // 初期化
+  Future<void> initDatabaseFactory() async {
+    // Windows/Linux プラットフォームの場合、FFI を使用
+    if (Platform.isWindows || Platform.isLinux) {
+      // FFI の初期化
+      sqfliteFfiInit();
+      // データベースファクトリの設定
+      databaseFactory = databaseFactoryFfi;
+    }
+  }
+
   Future<Database> get database async {
     if (_database != null) return _database!;
+
+    // データベース取得前にファクトリを初期化
+    await initDatabaseFactory();
+
     _database = await _initDB('pomodoro_app.db');
     return _database!;
   }
@@ -21,7 +38,11 @@ class DatabaseHelper {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
 
-    return await openDatabase(path, version: 1, onCreate: _createDB);
+    return await openDatabase(
+      path,
+      version: 1,
+      onCreate: _createDB,
+    );
   }
 
   Future<void> _createDB(Database db, int version) async {
