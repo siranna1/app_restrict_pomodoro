@@ -1,4 +1,3 @@
-// main.dart - アプリケーションのエントリーポイント
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -9,15 +8,28 @@ import 'screens/settings_screen.dart';
 import 'providers/task_provider.dart';
 import 'providers/pomodoro_provider.dart';
 import 'providers/app_restriction_provider.dart';
+import 'providers/ticktick_provider.dart';
+import 'providers/theme_provider.dart';
 import 'services/database_helper.dart';
 import 'services/notification_service.dart';
+import 'services/background_service.dart';
+import 'utils/platform_utils.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await DatabaseHelper.instance.database;
   await NotificationService().init();
 
-  // アプリ設定の初期化
+  // プラットフォーム固有の設定初期化
+  final platformService = PlatformUtils().getPlatformService();
+  await platformService.initializeSettings();
+
+  // バックグラウンドサービスの初期化
+  if (platformService.supportsBackgroundExecution) {
+    await BackgroundService().initialize();
+  }
+
+  // アプリ設定の読み込み
   final prefs = await SharedPreferences.getInstance();
 
   runApp(
@@ -26,6 +38,8 @@ void main() async {
         ChangeNotifierProvider(create: (_) => TaskProvider()),
         ChangeNotifierProvider(create: (_) => PomodoroProvider(prefs)),
         ChangeNotifierProvider(create: (_) => AppRestrictionProvider()),
+        ChangeNotifierProvider(create: (_) => TickTickProvider()),
+        ChangeNotifierProvider(create: (_) => ThemeProvider(prefs)),
       ],
       child: const MyApp(),
     ),
@@ -37,21 +51,15 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+
     return MaterialApp(
       title: 'ポモドーロ学習管理',
-      theme: ThemeData(
-        primarySwatch: Colors.red,
-        visualDensity: VisualDensity.adaptivePlatformDensity,
-        fontFamily: 'NotoSansJP',
-      ),
-      darkTheme: ThemeData(
-        brightness: Brightness.dark,
-        primarySwatch: Colors.red,
-        visualDensity: VisualDensity.adaptivePlatformDensity,
-        fontFamily: 'NotoSansJP',
-      ),
-      themeMode: ThemeMode.system,
+      theme: themeProvider.lightTheme,
+      darkTheme: themeProvider.darkTheme,
+      themeMode: themeProvider.themeMode,
       home: const MainScreen(),
+      debugShowCheckedModeBanner: false,
     );
   }
 }
@@ -75,23 +83,86 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // プラットフォームに応じてUIを調整
+    final isDesktop = PlatformUtils().isDesktop;
+
     return Scaffold(
-      body: _screens[_selectedIndex],
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBar.Fixed,
-        currentIndex: _selectedIndex,
-        onTap: (index) {
-          setState(() {
-            _selectedIndex = index;
-          });
-        },
-        items: const [
-          BottomNavigationBar.Item(icon: Icon(Icons.home), label: 'ホーム'),
-          BottomNavigationBar.Item(icon: Icon(Icons.task), label: 'タスク'),
-          BottomNavigationBar.Item(icon: Icon(Icons.bar_chart), label: '統計'),
-          BottomNavigationBar.Item(icon: Icon(Icons.settings), label: '設定'),
+      body: Row(
+        children: [
+          // デスクトップの場合は左側にナビゲーションレールを表示
+          if (isDesktop)
+            NavigationRail(
+              selectedIndex: _selectedIndex,
+              onDestinationSelected: (index) {
+                setState(() {
+                  _selectedIndex = index;
+                });
+              },
+              labelType: NavigationRailLabelType.selected,
+              destinations: const [
+                NavigationRailDestination(
+                  icon: Icon(Icons.home_outlined),
+                  selectedIcon: Icon(Icons.home),
+                  label: Text('ホーム'),
+                ),
+                NavigationRailDestination(
+                  icon: Icon(Icons.task_outlined),
+                  selectedIcon: Icon(Icons.task),
+                  label: Text('タスク'),
+                ),
+                NavigationRailDestination(
+                  icon: Icon(Icons.bar_chart_outlined),
+                  selectedIcon: Icon(Icons.bar_chart),
+                  label: Text('統計'),
+                ),
+                NavigationRailDestination(
+                  icon: Icon(Icons.settings_outlined),
+                  selectedIcon: Icon(Icons.settings),
+                  label: Text('設定'),
+                ),
+              ],
+            ),
+
+          // メインコンテンツ
+          Expanded(
+            child: _screens[_selectedIndex],
+          ),
         ],
       ),
+      // モバイルの場合は下部にナビゲーションバーを表示
+      bottomNavigationBar: isDesktop
+          ? null
+          : BottomNavigationBar(
+              type: BottomNavigationBarType.fixed,
+              currentIndex: _selectedIndex,
+              onTap: (index) {
+                setState(() {
+                  _selectedIndex = index;
+                });
+              },
+              items: const [
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.home_outlined),
+                  activeIcon: Icon(Icons.home),
+                  label: 'ホーム',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.task_outlined),
+                  activeIcon: Icon(Icons.task),
+                  label: 'タスク',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.bar_chart_outlined),
+                  activeIcon: Icon(Icons.bar_chart),
+                  label: '統計',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.settings_outlined),
+                  activeIcon: Icon(Icons.settings),
+                  label: '設定',
+                ),
+              ],
+            ),
     );
   }
 }
