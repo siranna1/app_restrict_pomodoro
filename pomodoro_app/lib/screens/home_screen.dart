@@ -42,6 +42,7 @@ class HomeScreen extends StatelessWidget {
                 onPause: pomodoroProvider.pauseTimer,
                 onResume: pomodoroProvider.resumeTimer,
                 onCancel: pomodoroProvider.cancelTimer,
+                onSkip: pomodoroProvider.skipTimer,
               ),
 
               const SizedBox(height: 24),
@@ -75,10 +76,14 @@ class HomeScreen extends StatelessWidget {
                 )
               else
                 // タスク選択ウィジェット
-                TaskSelection(
-                  tasks: taskProvider.tasks,
-                  onTaskSelected: (task) {
-                    pomodoroProvider.currentTask = task;
+                Consumer<TaskProvider>(
+                  builder: (context, taskProvider, child) {
+                    return TaskSelection(
+                      tasks: taskProvider.tasks,
+                      onTaskSelected: (task) {
+                        pomodoroProvider.currentTask = task;
+                      },
+                    );
                   },
                 ),
 

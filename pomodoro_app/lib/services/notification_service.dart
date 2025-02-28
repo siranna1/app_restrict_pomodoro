@@ -3,23 +3,18 @@ import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz;
 
 class NotificationService {
-  // 静的インスタンスの管理方法を変更
-  static NotificationService? _instance;
-
-  // ファクトリーメソッドを使ってインスタンスを安全に取得
-  factory NotificationService() {
-    _instance ??= NotificationService._internal();
-    return _instance!;
-  }
-  NotificationService._internal();
-
+  // 静的フィールドとプライベートコンストラクタを削除し、通常のクラスにする
   final FlutterLocalNotificationsPlugin _flutterLocalNotificationsPlugin =
       FlutterLocalNotificationsPlugin();
   bool _isInitialized = false;
 
+  // 一般的なコンストラクタを使用
+  NotificationService();
+
   // 通知初期化
-  Future<void> init() async {
-    if (_isInitialized) return;
+  Future<bool> init() async {
+    if (_isInitialized) return true;
+
     try {
       const AndroidInitializationSettings initializationSettingsAndroid =
           AndroidInitializationSettings('@mipmap/launcher_icon');
@@ -37,32 +32,27 @@ class NotificationService {
         iOS: initializationSettingsIOS,
       );
 
-      await _flutterLocalNotificationsPlugin.initialize(
+      final bool? result = await _flutterLocalNotificationsPlugin.initialize(
         initializationSettings,
       );
 
-      _isInitialized = true;
-      print('通知サービスが初期化されました');
+      _isInitialized = result ?? false;
+      return _isInitialized;
     } catch (e) {
-      print('通知サービスの初期化に失敗しました: $e');
+      _isInitialized = false;
+      return false;
     }
   }
 
   // 通知を表示 - エラーハンドリングを強化
-  Future<void> showNotification(String title, String body) async {
+  Future<bool> showNotification(String title, String body) async {
+    // 初期化されていない場合は初期化を試みる
+    if (!_isInitialized) {
+      final initialized = await init();
+      if (!initialized) return false;
+    }
+
     try {
-      // 初期化されていない場合は初期化を試みる
-      if (!_isInitialized) {
-        print('通知サービスが初期化されていないため、初期化を試みます');
-        await init();
-      }
-
-      // それでも初期化されていない場合はログだけ出して終了
-      if (!_isInitialized) {
-        print('通知サービスの初期化に失敗したため、通知を表示できません');
-        return;
-      }
-
       const AndroidNotificationDetails androidPlatformChannelSpecifics =
           AndroidNotificationDetails(
         'pomodoro_channel',
@@ -92,9 +82,9 @@ class NotificationService {
         platformChannelSpecifics,
       );
 
-      print('通知を表示しました: $title');
+      return true;
     } catch (e) {
-      print('通知の表示中にエラーが発生しました: $e');
+      return false;
     }
   }
 

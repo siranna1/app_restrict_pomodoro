@@ -6,6 +6,7 @@ import '../models/task.dart';
 import '../models/pomodoro_session.dart';
 import '../services/database_helper.dart';
 import '../services/notification_service.dart';
+import '../providers/task_provider.dart';
 
 class PomodoroProvider with ChangeNotifier {
   // タイマー設定
@@ -30,22 +31,19 @@ class PomodoroProvider with ChangeNotifier {
   DateTime? sessionStartTime;
 
   final SharedPreferences prefs;
-  final notificationService = NotificationService();
-  final bool notificationInitialized;
+  final NotificationService notificationService;
+  final TaskProvider? taskProvider;
 
-  PomodoroProvider(this.prefs, {this.notificationInitialized = false}) {
+  PomodoroProvider({
+    required this.prefs,
+    required this.notificationService,
+    this.taskProvider,
+  }) {
     // 設定の読み込み
     workDuration = prefs.getInt('workDuration') ?? 25;
     shortBreakDuration = prefs.getInt('shortBreakDuration') ?? 5;
     longBreakDuration = prefs.getInt('longBreakDuration') ?? 15;
     longBreakInterval = prefs.getInt('longBreakInterval') ?? 4;
-
-    // 通知サービスがまだ初期化されていなければ初期化
-    if (!notificationInitialized) {
-      notificationService.init().catchError((e) {
-        print('PomodoroProviderでの通知サービス初期化エラー: $e');
-      });
-    }
   }
 
   // タイマーを開始
@@ -93,7 +91,7 @@ class PomodoroProvider with ChangeNotifier {
         if (!isBreak) {
           // ポモドーロが完了
           _completePomodoro();
-          _tryShowNotification(
+          notificationService.showNotification(
             'ポモドーロ完了',
             '休憩時間です。次のセッションを始める準備をしましょう。',
           );
@@ -101,7 +99,8 @@ class PomodoroProvider with ChangeNotifier {
           // 休憩が完了
           isBreak = false;
           isRunning = false;
-          _tryShowNotification('休憩終了', '次のポモドーロセッションを始めましょう。');
+          startTimer(currentTask!);
+          notificationService.showNotification('休憩終了', '次のポモドーロセッションを始めましょう。');
         }
 
         notifyListeners();
@@ -113,15 +112,66 @@ class PomodoroProvider with ChangeNotifier {
   Future<void> _completePomodoro() async {
     if (currentTask == null || sessionStartTime == null) return;
 
+    try {
+      // セッションを保存
+      await _saveSession(workDuration);
+
+      // 休憩モードに移行
+      startBreak();
+    } catch (e) {
+      print('ポモドーロ完了の処理中にエラーが発生しました: $e');
+    }
+  }
+
+  // スキップ機能
+  Future<void> skipTimer() async {
+    if (!isRunning) return;
+
+    _timer?.cancel();
+
+    // 現在の経過時間を記録
+    final elapsedSeconds = totalSeconds - remainingSeconds;
+    final elapsedMinutes = (elapsedSeconds / 60).ceil();
+
+    if (!isBreak && elapsedMinutes >= 1) {
+      // 作業時間をスキップした場合、実際に作業した時間を記録
+      await _saveSession(elapsedMinutes);
+    }
+
+    // タイマー状態をリセット
+    if (isBreak) {
+      // 休憩をスキップした場合
+      isRunning = false;
+      isPaused = false;
+      isBreak = false;
+      remainingSeconds = 0;
+      startTimer(currentTask!);
+      notifyListeners();
+    } else {
+      // 作業時間をスキップした場合、休憩に進む
+      startBreak();
+
+      // 通知
+      notificationService.showNotification(
+          'ポモドーロスキップ', '休憩時間に進みます。次のセッションを始める準備をしましょう。');
+    }
+
+    notifyListeners();
+  }
+
+  // セッションを保存するヘルパーメソッド（コードの重複を避けるため）
+  Future<void> _saveSession(int durationMinutes) async {
+    if (currentTask == null || sessionStartTime == null) return;
+
     completedPomodoros++;
 
     try {
       // セッションを記録
       final session = PomodoroSession(
-        taskId: currentTask!.id ?? -1, // ID が null の場合の対策
+        taskId: currentTask!.id ?? -1,
         startTime: sessionStartTime!,
         endTime: DateTime.now(),
-        durationMinutes: workDuration,
+        durationMinutes: durationMinutes,
         completed: true,
         focusScore: _calculateFocusScore(),
       );
@@ -137,18 +187,13 @@ class PomodoroProvider with ChangeNotifier {
         );
 
         await DatabaseHelper.instance.updateTask(currentTask!);
+        // タスクプロバイダーに通知
+        if (taskProvider != null && currentTask!.id != null) {
+          await taskProvider!.refreshTask(currentTask!.id!);
+        }
       }
     } catch (e) {
-      print('ポモドーロ完了の記録中にエラーが発生しました: $e');
-    }
-  }
-
-  // 通知を表示
-  void _showNotification(String title, String body) {
-    try {
-      _tryShowNotification(title, body);
-    } catch (e) {
-      print('通知表示中にエラーが発生しました: $e');
+      // エラーをキャッチして無視（UIに影響させない）
     }
   }
 
@@ -186,15 +231,15 @@ class PomodoroProvider with ChangeNotifier {
   }
 
   // 通知表示を試みる（エラーハンドリング付き）
-  void _tryShowNotification(String title, String body) {
-    try {
-      notificationService.showNotification(title, body).catchError((e) {
-        print('通知表示エラー: $e');
-      });
-    } catch (e) {
-      print('通知表示中に例外が発生しました: $e');
-    }
-  }
+  // void notificationService.showNotification(String title, String body) {
+  //   try {
+  //     notificationService.showNotification(title, body).catchError((e) {
+  //       print('通知表示エラー: $e');
+  //     });
+  //   } catch (e) {
+  //     print('通知表示中に例外が発生しました: $e');
+  //   }
+  // }
 
   // 設定を保存
   Future<void> saveSettings({

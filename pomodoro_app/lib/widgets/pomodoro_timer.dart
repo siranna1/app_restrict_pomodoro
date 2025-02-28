@@ -11,6 +11,7 @@ class PomodoroTimer extends StatelessWidget {
   final VoidCallback onPause;
   final VoidCallback onResume;
   final VoidCallback onCancel;
+  final VoidCallback onSkip;
 
   const PomodoroTimer({
     Key? key,
@@ -23,6 +24,7 @@ class PomodoroTimer extends StatelessWidget {
     required this.onPause,
     required this.onResume,
     required this.onCancel,
+    required this.onSkip,
   }) : super(key: key);
 
   @override
@@ -113,16 +115,33 @@ class PomodoroTimer extends StatelessWidget {
                   ),
                 const SizedBox(width: 16),
                 if (isRunning)
-                  OutlinedButton.icon(
-                    icon: const Icon(Icons.stop),
-                    label: const Text('中止'),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 12,
+                  Row(
+                    // 複数のボタンを横に並べる
+                    children: [
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.stop),
+                        label: const Text('中止'),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                        ),
+                        onPressed: onCancel,
                       ),
-                    ),
-                    onPressed: onCancel,
+                      const SizedBox(width: 8),
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.skip_next),
+                        label: const Text('スキップ'),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                        ),
+                        onPressed: onSkip,
+                      ),
+                    ],
                   ),
               ],
             ),

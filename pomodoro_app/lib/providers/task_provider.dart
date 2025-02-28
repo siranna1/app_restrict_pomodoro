@@ -55,4 +55,16 @@ class TaskProvider with ChangeNotifier {
       notifyListeners();
     }
   }
+
+  // 特定のタスクを最新の状態に更新するメソッド
+  Future<void> refreshTask(int taskId) async {
+    if (taskId <= 0) return;
+
+    try {
+      // 単一タスクの更新ではなく、すべてのタスクを再読み込み
+      await loadTasks();
+    } catch (e) {
+      print('タスク更新中にエラーが発生しました: $e');
+    }
+  }
 }

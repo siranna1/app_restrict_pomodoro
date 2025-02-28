@@ -21,20 +21,16 @@ void main() async {
   await DatabaseHelper.instance.initDatabaseFactory();
   await DatabaseHelper.instance.database;
 
-  // 通知サービスの初期化 - 変数に保存して確認
+  // 通知サービスをインスタンス化して初期化
   final notificationService = NotificationService();
-  bool initSuccess = false;
-  try {
-    await notificationService.init();
-    initSuccess = true;
-    print('通知サービスの初期化に成功しました');
-  } catch (e) {
-    print('通知サービスの初期化に失敗しました: $e');
-  }
+  await notificationService.init();
 
   // プラットフォーム固有の設定初期化
   final platformService = PlatformUtils().getPlatformService();
   await platformService.initializeSettings();
+
+  //タスクプロバイダーを作成
+  final taskProvider = TaskProvider();
 
   // バックグラウンドサービスの初期化
   if (platformService.supportsBackgroundExecution) {
@@ -47,16 +43,24 @@ void main() async {
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => TaskProvider()),
+        //ChangeNotifierProvider(create: (_) => TaskProvider()),
         //ChangeNotifierProvider(create: (_) => PomodoroProvider(prefs)),
         ChangeNotifierProvider(create: (_) => AppRestrictionProvider()),
         ChangeNotifierProvider(create: (_) => TickTickProvider()),
         ChangeNotifierProvider(create: (_) => ThemeProvider(prefs)),
+        // 通知サービスのインスタンスを注入
         ChangeNotifierProvider(
-            create: (_) =>
-                PomodoroProvider(prefs, notificationInitialized: initSuccess)),
+          create: (_) => PomodoroProvider(
+            prefs: prefs,
+            notificationService: notificationService,
+            taskProvider: taskProvider,
+          ),
+        ),
+        ChangeNotifierProvider<TaskProvider>.value(
+          value: taskProvider,
+        ),
       ],
-      child: const MyApp(),
+      child: MyApp(),
     ),
   );
 }
