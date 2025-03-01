@@ -169,18 +169,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const Divider(),
           _buildSectionHeader(context, "アプリ制限"),
-          // Windowsアプリ制限（Windowsプラットフォームのみ表示）
-          if (Theme.of(context).platform == TargetPlatform.windows)
-            ListTile(
-              title: const Text('アプリ制限設定'),
-              subtitle: const Text('ポモドーロ目標達成までアプリの使用を制限します'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () {
-                Navigator.of(context).push(MaterialPageRoute(
-                  builder: (context) => const AppRestrictionScreen(),
-                ));
-              },
-            ),
 
           const Divider(),
 

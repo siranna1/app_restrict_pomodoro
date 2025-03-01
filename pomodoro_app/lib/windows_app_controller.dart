@@ -78,31 +78,21 @@ class WindowsAppController {
   // アプリの監視処理
   Future<void> _monitorApps() async {
     if (!Platform.isWindows) return;
-    await _loadCompletedPomodorosToday();
-    int updateCounter = 0;
     while (_isMonitoring) {
-      updateCounter++;
-      // 3回ごと（約15秒）にカウントを更新
-      if (updateCounter >= 3) {
-        await _loadCompletedPomodorosToday();
-        updateCounter = 0;
-        print("定期更新: 現在のポモドーロカウント: $_completedPomodorosToday");
-      }
-
       final runningApps = _getRunningApplications();
 
       for (final app in _restrictedApps) {
-        if (!app.isRestricted) continue;
+        // 制限が無効か、現在解除中の場合はスキップ
+        if (!app.isRestricted || app.isCurrentlyUnlocked) continue;
+
         final isRunning = runningApps.any((process) =>
             process.executablePath.toLowerCase() ==
             app.executablePath.toLowerCase());
 
         if (isRunning) {
-          // アプリが実行中で、制限条件に合致する場合は終了させる
-          if (_completedPomodorosToday < app.requiredPomodorosToUnlock) {
-            _terminateApplication(app.executablePath);
-            _showNotification(app);
-          }
+          // 制限中のアプリが実行されていれば終了
+          _terminateApplication(app.executablePath);
+          _showNotification(app);
         }
       }
 
@@ -213,7 +203,7 @@ class WindowsAppController {
     // print('制限状態: ${app.isRestricted}');
     // print('完了ポモドーロ数: $_completedPomodorosToday');
     // print('必要ポモドーロ数: ${app.requiredPomodorosToUnlock}');
-    print('アプリ「${app.name}」はポモドーロ ${app.requiredPomodorosToUnlock} 回の完了が必要です');
+    print('アプリ「${app.name}」は制限されています。ポイントを使用して一時的に解除できます。');
   }
 
   // 完了ポモドーロ数を更新
@@ -256,6 +246,13 @@ class WindowsAppController {
     );
 
     _restrictedApps.removeWhere((app) => app.id == id);
+  }
+
+  // 手動カウント更新メソッド
+  Future<void> manualUpdatePomodoroCount() async {
+    print("WindowsAppController.manualUpdatePomodoroCount が呼ばれました");
+    await _loadCompletedPomodorosToday();
+    print("更新後のポモドーロカウント: $_completedPomodorosToday");
   }
 }
 

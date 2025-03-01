@@ -14,6 +14,7 @@ import 'services/database_helper.dart';
 import 'services/notification_service.dart';
 import 'services/background_service.dart';
 import 'utils/platform_utils.dart';
+import 'screens/app_store_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -97,6 +98,7 @@ class _MainScreenState extends State<MainScreen> {
     const HomeScreen(),
     const TasksScreen(),
     const StatisticsScreen(),
+    const AppStoreScreen(),
     const SettingsScreen(),
   ];
 
@@ -133,6 +135,11 @@ class _MainScreenState extends State<MainScreen> {
                   icon: Icon(Icons.bar_chart_outlined),
                   selectedIcon: Icon(Icons.bar_chart),
                   label: Text('統計'),
+                ),
+                NavigationRailDestination(
+                  icon: Icon(Icons.shopping_bag_outlined),
+                  selectedIcon: Icon(Icons.shopping_bag),
+                  label: Text('アプリストア'), // 追加
                 ),
                 NavigationRailDestination(
                   icon: Icon(Icons.settings_outlined),
@@ -174,6 +181,11 @@ class _MainScreenState extends State<MainScreen> {
                   icon: Icon(Icons.bar_chart_outlined),
                   activeIcon: Icon(Icons.bar_chart),
                   label: '統計',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.shopping_bag_outlined),
+                  activeIcon: Icon(Icons.shopping_bag),
+                  label: 'アプリストア', // 追加
                 ),
                 BottomNavigationBarItem(
                   icon: Icon(Icons.settings_outlined),

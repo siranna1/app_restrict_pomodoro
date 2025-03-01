@@ -48,7 +48,8 @@ class _AppRestrictionScreenState extends State<AppRestrictionScreen> {
                 return ListTile(
                   leading: const Icon(Icons.apps),
                   title: Text(app.name),
-                  subtitle: Text('必要ポモドーロ: ${app.requiredPomodorosToUnlock}回'),
+                  subtitle:
+                      Text('ポイントコスト: 1時間あたり${app.pointCostPerHour ?? 2}ポイント'),
                   trailing: Switch(
                     value: app.isRestricted,
                     onChanged: (value) {
@@ -76,7 +77,8 @@ class _AppRestrictionScreenState extends State<AppRestrictionScreen> {
     final formKey = GlobalKey<FormState>();
     String appName = '';
     String executablePath = '';
-    int requiredPomodoros = 5;
+    int pointCostPerHour = 2;
+    int minutesPerPoint = 30;
 
     return showDialog(
       context: context,
@@ -143,14 +145,14 @@ class _AppRestrictionScreenState extends State<AppRestrictionScreen> {
                   const SizedBox(height: 16),
                   TextFormField(
                     decoration: const InputDecoration(
-                      labelText: '必要ポモドーロ回数',
-                      hintText: '例: 5',
+                      labelText: '1時間あたりのポイントコスト',
+                      hintText: '例: 2',
                     ),
                     keyboardType: TextInputType.number,
-                    initialValue: '5',
+                    initialValue: '2',
                     validator: (value) {
                       if (value == null || value.isEmpty) {
-                        return '回数を入力してください';
+                        return 'ポイントコストを入力してください';
                       }
                       final number = int.tryParse(value);
                       if (number == null || number <= 0) {
@@ -159,7 +161,29 @@ class _AppRestrictionScreenState extends State<AppRestrictionScreen> {
                       return null;
                     },
                     onSaved: (value) {
-                      requiredPomodoros = int.parse(value!);
+                      pointCostPerHour = int.parse(value!);
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    decoration: const InputDecoration(
+                      labelText: '1ポイントあたりの分数',
+                      hintText: '例: 30',
+                    ),
+                    keyboardType: TextInputType.number,
+                    initialValue: '30',
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return '分数を入力してください';
+                      }
+                      final number = int.tryParse(value);
+                      if (number == null || number <= 0) {
+                        return '正の整数を入力してください';
+                      }
+                      return null;
+                    },
+                    onSaved: (value) {
+                      minutesPerPoint = int.parse(value!);
                     },
                   ),
                 ],
@@ -187,7 +211,8 @@ class _AppRestrictionScreenState extends State<AppRestrictionScreen> {
                     executablePath: executablePath,
                     allowedMinutesPerDay: 0,
                     isRestricted: true,
-                    requiredPomodorosToUnlock: requiredPomodoros,
+                    pointCostPerHour: pointCostPerHour,
+                    minutesPerPoint: minutesPerPoint,
                   ));
 
                   Navigator.of(context).pop();
@@ -206,7 +231,8 @@ class _AppRestrictionScreenState extends State<AppRestrictionScreen> {
     final formKey = GlobalKey<FormState>();
     String appName = app.name;
     String executablePath = app.executablePath;
-    int requiredPomodoros = app.requiredPomodorosToUnlock;
+    int pointCostPerHour = app.pointCostPerHour ?? 2;
+    int minutesPerPoint = app.minutesPerPoint ?? 30;
 
     return showDialog(
       context: context,
@@ -273,13 +299,13 @@ class _AppRestrictionScreenState extends State<AppRestrictionScreen> {
                   const SizedBox(height: 16),
                   TextFormField(
                     decoration: const InputDecoration(
-                      labelText: '必要ポモドーロ回数',
+                      labelText: '1時間あたりのポイントコスト',
                     ),
                     keyboardType: TextInputType.number,
-                    initialValue: requiredPomodoros.toString(),
+                    initialValue: pointCostPerHour.toString(),
                     validator: (value) {
                       if (value == null || value.isEmpty) {
-                        return '回数を入力してください';
+                        return 'ポイントコストを入力してください';
                       }
                       final number = int.tryParse(value);
                       if (number == null || number <= 0) {
@@ -288,7 +314,28 @@ class _AppRestrictionScreenState extends State<AppRestrictionScreen> {
                       return null;
                     },
                     onSaved: (value) {
-                      requiredPomodoros = int.parse(value!);
+                      pointCostPerHour = int.parse(value!);
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    decoration: const InputDecoration(
+                      labelText: '1ポイントあたりの分数',
+                    ),
+                    keyboardType: TextInputType.number,
+                    initialValue: minutesPerPoint.toString(),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return '分数を入力してください';
+                      }
+                      final number = int.tryParse(value);
+                      if (number == null || number <= 0) {
+                        return '正の整数を入力してください';
+                      }
+                      return null;
+                    },
+                    onSaved: (value) {
+                      minutesPerPoint = int.parse(value!);
                     },
                   ),
                 ],
@@ -326,7 +373,8 @@ class _AppRestrictionScreenState extends State<AppRestrictionScreen> {
                   provider.updateRestrictedApp(app.copyWith(
                     name: appName,
                     executablePath: executablePath,
-                    requiredPomodorosToUnlock: requiredPomodoros,
+                    pointCostPerHour: pointCostPerHour,
+                    minutesPerPoint: minutesPerPoint,
                   ));
 
                   Navigator.of(context).pop();

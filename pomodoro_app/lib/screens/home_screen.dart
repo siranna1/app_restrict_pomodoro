@@ -6,6 +6,7 @@ import '../providers/pomodoro_provider.dart';
 import '../widgets/pomodoro_timer.dart';
 import '../widgets/task_selection.dart';
 import '../widgets/daily_progress.dart';
+import '../widgets/point_summary.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -86,6 +87,11 @@ class HomeScreen extends StatelessWidget {
                     );
                   },
                 ),
+
+              const SizedBox(height: 24),
+
+              // ポイント表示ウィジェットを追加
+              const PointSummary(),
 
               const SizedBox(height: 24),
 
