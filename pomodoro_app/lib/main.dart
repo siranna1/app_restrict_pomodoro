@@ -17,9 +17,14 @@ import 'utils/platform_utils.dart';
 import 'screens/app_store_screen.dart';
 import 'services/sound_service.dart';
 import 'utils/global_context.dart';
+import 'services/settings_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // 設定サービスを初期化
+  final settingsService = SettingsService();
+  await settingsService.init();
+
   // データベースファクトリの初期化
   await DatabaseHelper.instance.initDatabaseFactory();
   await DatabaseHelper.instance.database;
@@ -42,21 +47,15 @@ void main() async {
     await BackgroundService().initialize();
   }
 
-  // アプリ設定の読み込み
-  final prefs = await SharedPreferences.getInstance();
-
   runApp(
     MultiProvider(
       providers: [
-        //ChangeNotifierProvider(create: (_) => TaskProvider()),
-        //ChangeNotifierProvider(create: (_) => PomodoroProvider(prefs)),
         ChangeNotifierProvider(create: (_) => AppRestrictionProvider()),
         ChangeNotifierProvider(create: (_) => TickTickProvider()),
-        ChangeNotifierProvider(create: (_) => ThemeProvider(prefs)),
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
         // 通知サービスのインスタンスを注入
         ChangeNotifierProvider(
           create: (_) => PomodoroProvider(
-            prefs: prefs,
             notificationService: notificationService,
             taskProvider: taskProvider,
             soundService: soundService,
@@ -64,6 +63,10 @@ void main() async {
         ),
         ChangeNotifierProvider<TaskProvider>.value(
           value: taskProvider,
+        ),
+
+        ChangeNotifierProvider<SettingsService>.value(
+          value: settingsService,
         ),
       ],
       child: MyApp(),

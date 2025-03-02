@@ -10,6 +10,7 @@ import '../providers/task_provider.dart';
 import 'app_restriction_provider.dart';
 import '../services/sound_service.dart';
 import '../utils/global_context.dart';
+import '../services/settings_service.dart';
 
 class PomodoroProvider with ChangeNotifier {
   // タイマー設定
@@ -33,22 +34,25 @@ class PomodoroProvider with ChangeNotifier {
   // セッション記録
   DateTime? sessionStartTime;
 
-  final SharedPreferences prefs;
+  final SettingsService _settingService = SettingsService();
   final NotificationService notificationService;
   final TaskProvider? taskProvider;
   final SoundService soundService;
 
   PomodoroProvider({
-    required this.prefs,
     required this.notificationService,
     this.taskProvider,
     required this.soundService,
   }) {
+    _loadSettings();
+  }
+  Future<void> _loadSettings() async {
     // 設定の読み込み
-    workDuration = prefs.getInt('workDuration') ?? 25;
-    shortBreakDuration = prefs.getInt('shortBreakDuration') ?? 5;
-    longBreakDuration = prefs.getInt('longBreakDuration') ?? 15;
-    longBreakInterval = prefs.getInt('longBreakInterval') ?? 4;
+    workDuration = await _settingService.getWorkDuration();
+    shortBreakDuration = await _settingService.getShortBreakDuration();
+    longBreakDuration = await _settingService.getLongBreakDuration();
+    longBreakInterval = await _settingService.getLongBreakInterval();
+    notifyListeners();
   }
 
   // タイマーを開始
@@ -281,22 +285,22 @@ class PomodoroProvider with ChangeNotifier {
   }) async {
     if (workDuration != null) {
       this.workDuration = workDuration;
-      await prefs.setInt('workDuration', workDuration);
+      await _settingService.setWorkDuration(workDuration);
     }
 
     if (shortBreakDuration != null) {
       this.shortBreakDuration = shortBreakDuration;
-      await prefs.setInt('shortBreakDuration', shortBreakDuration);
+      await _settingService.setShortBreakDuration(shortBreakDuration);
     }
 
     if (longBreakDuration != null) {
       this.longBreakDuration = longBreakDuration;
-      await prefs.setInt('longBreakDuration', longBreakDuration);
+      await _settingService.setLongBreakDuration(longBreakDuration);
     }
 
     if (longBreakInterval != null) {
       this.longBreakInterval = longBreakInterval;
-      await prefs.setInt('longBreakInterval', longBreakInterval);
+      await _settingService.setLongBreakInterval(longBreakInterval);
     }
 
     notifyListeners();

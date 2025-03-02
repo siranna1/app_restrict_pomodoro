@@ -1,9 +1,11 @@
 // services/sound_service.dart
 import 'package:audioplayers/audioplayers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/settings_service.dart ';
 
 class SoundService {
   final AudioPlayer _audioPlayer = AudioPlayer();
+  final SettingsService _settingsService = SettingsService();
   bool _enableSounds = true;
 
   SoundService() {
@@ -12,15 +14,14 @@ class SoundService {
 
   // 設定を読み込む
   Future<void> _loadSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    _enableSounds = prefs.getBool('enableSounds') ?? true;
+    _enableSounds = await _settingsService.getSoundsEnabled();
   }
 
   // 音声の有効/無効を設定
   Future<void> setEnableSounds(bool enable) async {
     _enableSounds = enable;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('enableSounds', enable);
+
+    _settingsService.setSoundsEnabled(enable);
   }
 
   // 音声が有効かどうか
@@ -29,7 +30,7 @@ class SoundService {
   // ポモドーロ完了時の音声を再生
   Future<void> playPomodoroCompleteSound() async {
     if (!_enableSounds) return;
-    print("音声再生");
+
     try {
       await _audioPlayer.play(AssetSource('sounds/pomodoro_complete.mp3'),
           volume: 1.0);

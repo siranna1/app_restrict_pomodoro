@@ -6,6 +6,7 @@ import '../providers/app_restriction_provider.dart';
 import 'app_restriction_screen.dart';
 import 'ticktick_sync_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/settings_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -23,23 +24,92 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _enableNotifications = true;
   bool _enableSounds = true;
   String _selectedTheme = 'system';
+  SettingsService? _settingsService;
 
+  bool _isLoading = true;
   @override
   void initState() {
     super.initState();
+    _loadSettings();
+  }
 
-    // 現在の設定を読み込み
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_settingsService == null) {
+      _settingsService = Provider.of<SettingsService>(context);
+      if (!_isLoading) {
+        _loadSettings();
+      }
+    }
+  }
+
+  Future<void> _loadSettings() async {
+    setState(() {
+      _isLoading = true;
+    });
+
     final pomodoroProvider =
         Provider.of<PomodoroProvider>(context, listen: false);
+    final settingsService =
+        Provider.of<SettingsService>(context, listen: false);
+
     _workDuration = pomodoroProvider.workDuration;
     _shortBreakDuration = pomodoroProvider.shortBreakDuration;
     _longBreakDuration = pomodoroProvider.longBreakDuration;
     _longBreakInterval = pomodoroProvider.longBreakInterval;
+
+    _enableNotifications = await settingsService.getNotificationsEnabled();
+    _enableSounds = await settingsService.getSoundsEnabled();
+
+    final themeMode = await settingsService.getThemeMode();
+    _selectedTheme = _themeModeToString(themeMode);
+
+    setState(() {
+      _isLoading = false;
+    });
+  }
+
+  // ThemeModeを文字列に変換
+  String _themeModeToString(ThemeMode themeMode) {
+    switch (themeMode) {
+      case ThemeMode.light:
+        return 'light';
+      case ThemeMode.dark:
+        return 'dark';
+      case ThemeMode.system:
+      default:
+        return 'system';
+    }
+  }
+
+  // 文字列をThemeModeに変換
+  ThemeMode _stringToThemeMode(String themeModeString) {
+    switch (themeModeString) {
+      case 'light':
+        return ThemeMode.light;
+      case 'dark':
+        return ThemeMode.dark;
+      case 'system':
+      default:
+        return ThemeMode.system;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final pomodoroProvider = Provider.of<PomodoroProvider>(context);
+
+    if (_isLoading) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('設定'),
+        ),
+        body: const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -168,8 +238,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               },
             ),
           ),
-          const Divider(),
-          _buildSectionHeader(context, "アプリ制限"),
 
           const Divider(),
 
@@ -180,11 +248,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
             title: const Text('通知'),
             subtitle: const Text('ポモドーロ完了時に通知を表示します'),
             value: _enableNotifications,
-            onChanged: (value) {
+            onChanged: (value) async {
               setState(() {
                 _enableNotifications = value;
               });
-              // 通知設定を保存する実装
+
+              await _settingsService!.setNotificationsEnabled(value);
             },
           ),
 
@@ -196,15 +265,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               setState(() {
                 _enableSounds = value;
               });
+              await _settingsService!.setSoundsEnabled(value);
 
               // 音声サービスに設定を反映
               final pomodoroProvider =
                   Provider.of<PomodoroProvider>(context, listen: false);
               await pomodoroProvider.soundService.setEnableSounds(value);
-
-              // 設定を保存（既に SoundService 内で保存されるが、UI 状態との一貫性のため）
-              final prefs = await SharedPreferences.getInstance();
-              await prefs.setBool('enableSounds', value);
             },
           ),
 
@@ -218,12 +284,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
             subtitle: Text(_getThemeName(_selectedTheme)),
             trailing: DropdownButton<String>(
               value: _selectedTheme,
-              onChanged: (value) {
+              onChanged: (value) async {
                 if (value != null) {
                   setState(() {
                     _selectedTheme = value;
                   });
-                  // テーマ設定を保存する実装
+                  await _settingsService!
+                      .setThemeMode(_stringToThemeMode(value));
                 }
               },
               items: const [
@@ -283,6 +350,51 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onTap: () {
               // 利用規約を表示する実装
             },
+          ),
+
+          const Divider(),
+
+          // 設定リセット
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('すべての設定をリセット'),
+              onPressed: () async {
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('設定リセット'),
+                    content: const Text('すべての設定をデフォルト値に戻しますか？この操作は元に戻せません。'),
+                    actions: [
+                      TextButton(
+                        child: const Text('キャンセル'),
+                        onPressed: () => Navigator.of(context).pop(false),
+                      ),
+                      TextButton(
+                        child: const Text('リセット'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.red,
+                        ),
+                        onPressed: () => Navigator.of(context).pop(true),
+                      ),
+                    ],
+                  ),
+                );
+
+                if (confirmed == true) {
+                  await _settingsService!.resetAllSettings();
+                  await _loadSettings();
+
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('設定をリセットしました')),
+                  );
+                }
+              },
+            ),
           ),
         ],
       ),

@@ -1,17 +1,21 @@
 // providers/theme_provider.dart - テーマ設定プロバイダー
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/settings_service.dart';
 
 class ThemeProvider with ChangeNotifier {
-  final SharedPreferences prefs;
+  final SettingsService _settingsService = SettingsService();
 
   // テーマモード（system, light, dark）
   ThemeMode _themeMode = ThemeMode.system;
 
-  ThemeProvider(this.prefs) {
-    // 保存されたテーマ設定を読み込む
-    final themeModeString = prefs.getString('themeMode') ?? 'system';
-    _themeMode = _stringToThemeMode(themeModeString);
+  ThemeProvider() {
+    _loadSettings();
+  }
+
+  Future<void> _loadSettings() async {
+    _themeMode = await _settingsService.getThemeMode();
+    notifyListeners();
   }
 
   // 現在のテーマモード
@@ -20,7 +24,7 @@ class ThemeProvider with ChangeNotifier {
   // テーマモードを設定
   Future<void> setThemeMode(ThemeMode mode) async {
     _themeMode = mode;
-    await prefs.setString('themeMode', _themeModeToString(mode));
+    await _settingsService.setThemeMode(mode);
     notifyListeners();
   }
 
