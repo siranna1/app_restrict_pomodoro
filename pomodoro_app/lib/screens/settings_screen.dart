@@ -5,6 +5,7 @@ import '../providers/pomodoro_provider.dart';
 import '../providers/app_restriction_provider.dart';
 import 'app_restriction_screen.dart';
 import 'ticktick_sync_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -191,11 +192,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
             title: const Text('効果音'),
             subtitle: const Text('タイマー開始・終了時に音を鳴らします'),
             value: _enableSounds,
-            onChanged: (value) {
+            onChanged: (value) async {
               setState(() {
                 _enableSounds = value;
               });
-              // 音設定を保存する実装
+
+              // 音声サービスに設定を反映
+              final pomodoroProvider =
+                  Provider.of<PomodoroProvider>(context, listen: false);
+              await pomodoroProvider.soundService.setEnableSounds(value);
+
+              // 設定を保存（既に SoundService 内で保存されるが、UI 状態との一貫性のため）
+              final prefs = await SharedPreferences.getInstance();
+              await prefs.setBool('enableSounds', value);
             },
           ),
 

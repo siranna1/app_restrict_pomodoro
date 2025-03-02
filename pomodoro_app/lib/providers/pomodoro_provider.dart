@@ -8,6 +8,8 @@ import '../services/database_helper.dart';
 import '../services/notification_service.dart';
 import '../providers/task_provider.dart';
 import 'app_restriction_provider.dart';
+import '../services/sound_service.dart';
+import '../utils/global_context.dart';
 
 class PomodoroProvider with ChangeNotifier {
   // タイマー設定
@@ -34,11 +36,13 @@ class PomodoroProvider with ChangeNotifier {
   final SharedPreferences prefs;
   final NotificationService notificationService;
   final TaskProvider? taskProvider;
+  final SoundService soundService;
 
   PomodoroProvider({
     required this.prefs,
     required this.notificationService,
     this.taskProvider,
+    required this.soundService,
   }) {
     // 設定の読み込み
     workDuration = prefs.getInt('workDuration') ?? 25;
@@ -51,21 +55,21 @@ class PomodoroProvider with ChangeNotifier {
   void startTimer(Task task) {
     currentTask = task;
     isRunning = true;
-    isPaused = false;
+    isPaused = true;
     isBreak = false;
 
     totalSeconds = workDuration * 60;
     remainingSeconds = totalSeconds;
     sessionStartTime = DateTime.now();
 
-    _startCountdown();
+    //_startCountdown();
     notifyListeners();
   }
 
   // 休憩タイマーを開始
   void startBreak() {
     isRunning = true;
-    isPaused = false;
+    isPaused = true;
     isBreak = true;
 
     // 長い休憩か短い休憩かを決定
@@ -75,7 +79,7 @@ class PomodoroProvider with ChangeNotifier {
     totalSeconds = breakDuration * 60;
     remainingSeconds = totalSeconds;
 
-    _startCountdown();
+    //_startCountdown();
     notifyListeners();
   }
 
@@ -92,16 +96,20 @@ class PomodoroProvider with ChangeNotifier {
         if (!isBreak) {
           // ポモドーロが完了
           _completePomodoro();
-          notificationService.showNotification(
-            'ポモドーロ完了',
-            '休憩時間です。次のセッションを始める準備をしましょう。',
-          );
         } else {
+          soundService.playBreakCompleteSound();
           // 休憩が完了
-          isBreak = false;
-          isRunning = false;
+          //isBreak = false;
+          //isRunning = false;
           startTimer(currentTask!);
           notificationService.showNotification('休憩終了', '次のポモドーロセッションを始めましょう。');
+          final context = GlobalContext.context;
+          notificationService.showNotificationBasedOnState(
+            context,
+            '休憩終了',
+            '次のポモドーロセッションを始めましょう。',
+            onDismiss: () => soundService.stopAllSounds(), // ダイアログを閉じたら音を停止
+          );
         }
 
         notifyListeners();
@@ -110,13 +118,31 @@ class PomodoroProvider with ChangeNotifier {
   }
 
   // ポモドーロを完了としてマーク
-  Future<void> _completePomodoro() async {
+  Future<void> _completePomodoro({int? customDuration}) async {
     if (currentTask == null || sessionStartTime == null) return;
 
     try {
       // セッションを保存
-      await _saveSession(workDuration);
+      final duration = customDuration ?? workDuration;
+      await _saveSession(duration);
 
+      await soundService.playPomodoroCompleteSound();
+
+      final message = customDuration != null
+          ? 'ポモドーロをスキップしました。$customDuration分間の作業を記録しました。'
+          : '休憩時間です。次のセッションを始める準備をしましょう。';
+      final title = customDuration != null ? 'ポモドーロスキップ' : 'ポモドーロ完了';
+      notificationService.showNotification(
+        title,
+        message,
+      );
+      final context = GlobalContext.context;
+      notificationService.showNotificationBasedOnState(
+        context,
+        title,
+        message,
+        onDismiss: () => soundService.stopAllSounds(), // ダイアログを閉じたら音を停止
+      );
       // 休憩モードに移行
       startBreak();
     } catch (e) {
@@ -136,28 +162,20 @@ class PomodoroProvider with ChangeNotifier {
 
     if (!isBreak && elapsedMinutes >= 1) {
       // 作業時間をスキップした場合、実際に作業した時間を記録
-      await _saveSession(elapsedMinutes);
-    }
-
-    // タイマー状態をリセット
-    if (isBreak) {
-      // 休憩をスキップした場合
-      isRunning = false;
-      isPaused = false;
-      isBreak = false;
-      remainingSeconds = 0;
+      await _completePomodoro(customDuration: elapsedMinutes);
+    } else if (isBreak) {
+      await soundService.playBreakCompleteSound();
+      notificationService.showNotification('休憩終了', '次のポモドーロセッションを始めましょう。');
+      final context = GlobalContext.context;
+      notificationService.showNotificationBasedOnState(
+        context,
+        '休憩終了',
+        '次のポモドーロセッションを始めましょう。',
+        onDismiss: () => soundService.stopAllSounds(), // ダイアログを閉じたら音を停止
+      );
       startTimer(currentTask!);
       notifyListeners();
-    } else {
-      // 作業時間をスキップした場合、休憩に進む
-      startBreak();
-
-      // 通知
-      notificationService.showNotification(
-          'ポモドーロスキップ', '休憩時間に進みます。次のセッションを始める準備をしましょう。');
     }
-
-    notifyListeners();
   }
 
   // セッションを保存するヘルパーメソッド（コードの重複を避けるため）
@@ -219,6 +237,7 @@ class PomodoroProvider with ChangeNotifier {
     if (isRunning && !isPaused) {
       isPaused = true;
       _timer?.cancel();
+      soundService.stopAllSounds(); // 音を停止
       notifyListeners();
     }
   }
@@ -228,6 +247,7 @@ class PomodoroProvider with ChangeNotifier {
     if (isRunning && isPaused) {
       isPaused = false;
       _startCountdown();
+      soundService.stopAllSounds(); // 音を停止
       notifyListeners();
     }
   }
@@ -237,6 +257,7 @@ class PomodoroProvider with ChangeNotifier {
     _timer?.cancel();
     isRunning = false;
     isPaused = false;
+    soundService.stopAllSounds(); // 音を停止
     notifyListeners();
   }
 

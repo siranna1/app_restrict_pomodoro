@@ -15,6 +15,8 @@ import 'services/notification_service.dart';
 import 'services/background_service.dart';
 import 'utils/platform_utils.dart';
 import 'screens/app_store_screen.dart';
+import 'services/sound_service.dart';
+import 'utils/global_context.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -25,6 +27,8 @@ void main() async {
   // 通知サービスをインスタンス化して初期化
   final notificationService = NotificationService();
   await notificationService.init();
+  // 音声サービスをインスタンス化
+  final soundService = SoundService();
 
   // プラットフォーム固有の設定初期化
   final platformService = PlatformUtils().getPlatformService();
@@ -55,6 +59,7 @@ void main() async {
             prefs: prefs,
             notificationService: notificationService,
             taskProvider: taskProvider,
+            soundService: soundService,
           ),
         ),
         ChangeNotifierProvider<TaskProvider>.value(
@@ -78,6 +83,7 @@ class MyApp extends StatelessWidget {
       theme: themeProvider.lightTheme,
       darkTheme: themeProvider.darkTheme,
       themeMode: themeProvider.themeMode,
+      navigatorKey: GlobalContext.navigatorKey,
       home: const MainScreen(),
       debugShowCheckedModeBanner: false,
     );
@@ -91,7 +97,7 @@ class MainScreen extends StatefulWidget {
   _MainScreenState createState() => _MainScreenState();
 }
 
-class _MainScreenState extends State<MainScreen> {
+class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   int _selectedIndex = 0;
 
   final List<Widget> _screens = [
@@ -101,6 +107,23 @@ class _MainScreenState extends State<MainScreen> {
     const AppStoreScreen(),
     const SettingsScreen(),
   ];
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // アプリのライフサイクル状態が変わったときに呼ばれる
+    // これにより、WidgetsBinding.instance.lifecycleState が更新される
+  }
 
   @override
   Widget build(BuildContext context) {

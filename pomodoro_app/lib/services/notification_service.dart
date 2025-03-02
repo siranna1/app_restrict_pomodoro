@@ -1,6 +1,7 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz;
+import 'package:flutter/material.dart';
 
 class NotificationService {
   // 静的フィールドとプライベートコンストラクタを削除し、通常のクラスにする
@@ -137,5 +138,87 @@ class NotificationService {
   // すべての通知をキャンセル
   Future<void> cancelAllNotifications() async {
     await _flutterLocalNotificationsPlugin.cancelAll();
+  }
+
+  // アプリ内通知を表示（SnackBar形式）
+  void showInAppSnackBar(BuildContext context, String title, String message,
+      {VoidCallback? onDismiss}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(message),
+          ],
+        ),
+        duration: const Duration(seconds: 5),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+        action: SnackBarAction(
+          label: '閉じる',
+          onPressed: () {
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+            if (onDismiss != null) onDismiss();
+          },
+        ),
+      ),
+    );
+  }
+
+  // アプリ内通知をダイアログ形式で表示
+  void showInAppDialog(BuildContext context, String title, String message,
+      {VoidCallback? onDismiss}) {
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: Text(title),
+          content: Text(message),
+          actions: [
+            TextButton(
+              child: const Text('OK'),
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+                if (onDismiss != null) onDismiss();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // アプリの状態に応じて適切な通知を表示
+  void showNotificationBasedOnState(
+    BuildContext? context,
+    String title,
+    String message, {
+    VoidCallback? onDismiss,
+    bool useDialog = false, // デフォルトはダイアログなし
+  }) {
+    // システム通知は常に表示
+    showNotification(title, message);
+
+    // コンテキストがあれば、アプリ内通知も表示
+    if (context != null) {
+      if (useDialog) {
+        // ダイアログで表示
+        showInAppDialog(context, title, message, onDismiss: onDismiss);
+      } else {
+        // SnackBarで表示
+        showInAppSnackBar(context, title, message, onDismiss: onDismiss);
+      }
+    }
   }
 }
