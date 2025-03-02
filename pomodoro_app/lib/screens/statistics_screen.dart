@@ -164,7 +164,7 @@ class DailyStatisticsTab extends StatelessWidget {
                           style: Theme.of(context).textTheme.titleLarge,
                         ),
                         const SizedBox(height: 16),
-                        Expanded(
+                        Flexible(
                           child: BarChart(
                             BarChartData(
                               alignment: BarChartAlignment.spaceAround,
@@ -441,7 +441,7 @@ class WeeklyStatisticsTab extends StatelessWidget {
                           style: Theme.of(context).textTheme.titleLarge,
                         ),
                         const SizedBox(height: 16),
-                        Expanded(
+                        Flexible(
                           child: BarChart(
                             BarChartData(
                               alignment: BarChartAlignment.spaceAround,

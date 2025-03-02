@@ -190,13 +190,16 @@ class PomodoroProvider with ChangeNotifier {
 
     try {
       // セッションを記録
-      final session = PomodoroSession(
+      final session = PomodoroSession.withTimeOfDay(
         taskId: currentTask!.id ?? -1,
         startTime: sessionStartTime!,
         endTime: DateTime.now(),
         durationMinutes: durationMinutes,
         completed: true,
         focusScore: _calculateFocusScore(),
+        interruptionCount: _interruptionCount,
+        mood: _sessionMood,
+        isBreak: isBreak,
       );
 
       // タスク ID が有効な場合のみデータベースに保存
@@ -210,14 +213,28 @@ class PomodoroProvider with ChangeNotifier {
         );
 
         await DatabaseHelper.instance.updateTask(currentTask!);
+
+        // 日次目標の達成状況を更新
+        final today = DateTime.now();
+        final dailyGoal = await DatabaseHelper.instance.getDailyGoal(today);
+        if (dailyGoal != null) {
+          await DatabaseHelper.instance.updateDailyGoalAchievement(dailyGoal);
+        }
+
         // タスクプロバイダーに通知
         if (taskProvider != null && currentTask!.id != null) {
           await taskProvider!.refreshTask(currentTask!.id!);
         }
+
+        // 中断カウントをリセット
+        resetInterruptionCount();
+        // 気分評価をリセット
+        _sessionMood = null;
+
         notifyListeners();
 
         try {
-          // BuildContextが不要なように、静的メソッドを呼び出す方式に変更
+          // AppRestrictionProvider に通知
           await AppRestrictionProvider.notifyPomodoroCompleted();
           print("ポモドーロ完了を AppRestrictionProvider に通知しました");
         } catch (e) {
@@ -229,11 +246,48 @@ class PomodoroProvider with ChangeNotifier {
     }
   }
 
+  // 休憩セッションを保存（休憩記録機能を追加）
+  Future<void> _saveBreakSession(int durationMinutes) async {
+    try {
+      // 休憩セッションを記録
+      final session = PomodoroSession(
+        taskId: currentTask?.id ?? -1,
+        startTime: sessionStartTime!,
+        endTime: DateTime.now(),
+        durationMinutes: durationMinutes,
+        completed: true,
+        focusScore: 100.0, // 休憩は常に100%とみなす
+        timeOfDay: null, // 自動設定されるのでnullでOK
+        interruptionCount: 0,
+        mood: null,
+        isBreak: true,
+      );
+
+      // データベースに保存（タスクIDが無効でも保存）
+      await DatabaseHelper.instance.insertPomodoroSession(session);
+    } catch (e) {
+      print("休憩セッション保存エラー: $e");
+    }
+  }
+
   // 集中度スコアを計算（デモとして単純な実装）
   double _calculateFocusScore() {
-    // ここで集中度を計算するロジックを実装
-    // 実際のアプリでは、一時停止回数や中断時間などから計算
-    return 100.0;
+    // 基本スコア（100点満点）
+    double baseScore = 100.0;
+
+    // 中断ごとにスコアを減点（中断1回につき10点減点、最大50点まで）
+    double interruptionPenalty = _interruptionCount * 10.0;
+    interruptionPenalty =
+        interruptionPenalty > 50.0 ? 50.0 : interruptionPenalty;
+
+    // 一時停止回数によるペナルティ（pauseTimerが呼ばれた回数に応じて）
+    // この実装では省略（実際には一時停止回数を追跡する必要があります）
+
+    // 最終スコアを計算
+    double finalScore = baseScore - interruptionPenalty;
+
+    // 0〜100の範囲に収める
+    return finalScore.clamp(0.0, 100.0);
   }
 
   // タイマーを一時停止
@@ -262,6 +316,30 @@ class PomodoroProvider with ChangeNotifier {
     isRunning = false;
     isPaused = false;
     soundService.stopAllSounds(); // 音を停止
+    notifyListeners();
+  }
+
+  // 中断カウントを追加
+  int _interruptionCount = 0;
+
+  // 中断をカウントするメソッド
+  void countInterruption() {
+    _interruptionCount++;
+    notifyListeners();
+  }
+
+  // 中断カウントをリセット
+  void resetInterruptionCount() {
+    _interruptionCount = 0;
+    notifyListeners();
+  }
+
+  // 気分評価を保存するためのプロパティ
+  String? _sessionMood;
+
+  // 気分評価を設定
+  void setSessionMood(String mood) {
+    _sessionMood = mood;
     notifyListeners();
   }
 
