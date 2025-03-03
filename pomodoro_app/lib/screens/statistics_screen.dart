@@ -20,6 +20,7 @@ class StatisticsScreen extends StatefulWidget {
 class _StatisticsScreenState extends State<StatisticsScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -33,11 +34,112 @@ class _StatisticsScreenState extends State<StatisticsScreen>
     super.dispose();
   }
 
+  // テストデータを追加
+  Future<void> _addTestData() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // 10件のテストデータを追加
+      await DatabaseHelper.instance.addTestData(10);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('10件のテストデータを追加しました')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('エラーが発生しました: $e')),
+      );
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  // テストデータを削除
+  Future<void> _deleteTestData() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final deletedCount = await DatabaseHelper.instance.deleteTestData();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${deletedCount}件のテストデータを削除しました')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('エラーが発生しました: $e')),
+      );
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('学習統計'),
+        actions: [
+          // テストデータ追加ボタン
+          IconButton(
+            icon: const Icon(Icons.add_chart),
+            tooltip: 'テストデータを追加',
+            onPressed: _isLoading ? null : _addTestData,
+          ),
+          // テストデータ削除ボタン
+          IconButton(
+            icon: const Icon(Icons.delete_sweep),
+            tooltip: 'テストデータを削除',
+            onPressed: _isLoading ? null : _deleteTestData,
+          ),
+          // オプション：メニューからも選択できるようにする
+          PopupMenuButton(
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 'add_10',
+                child: Text('テストデータ10件追加'),
+              ),
+              PopupMenuItem(
+                value: 'add_30',
+                child: Text('テストデータ30件追加'),
+              ),
+              PopupMenuItem(
+                value: 'add_100',
+                child: Text('テストデータ100件追加'),
+              ),
+              PopupMenuItem(
+                value: 'delete',
+                child: Text('テストデータを削除'),
+              ),
+            ],
+            onSelected: (value) async {
+              if (value == 'delete') {
+                await _deleteTestData();
+              } else if (value == 'add_10') {
+                await DatabaseHelper.instance.addTestData(10);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('10件のテストデータを追加しました')),
+                );
+              } else if (value == 'add_30') {
+                await DatabaseHelper.instance.addTestData(30);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('30件のテストデータを追加しました')),
+                );
+              } else if (value == 'add_100') {
+                await DatabaseHelper.instance.addTestData(100);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('100件のテストデータを追加しました')),
+                );
+              }
+              setState(() {}); // 画面を更新
+            },
+          ),
+        ],
         bottom: TabBar(
           controller: _tabController,
           isScrollable: true,

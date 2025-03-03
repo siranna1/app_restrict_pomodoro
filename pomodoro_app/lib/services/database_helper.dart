@@ -10,6 +10,8 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'dart:io' show Platform;
 import '../models/daily_goal.dart';
 
+import 'dart:math';
+
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
   static Database? _database;
@@ -927,5 +929,149 @@ class DatabaseHelper {
       orderBy: 'startTime DESC',
     );
     return results.map((map) => AppUsageSession.fromMap(map)).toList();
+  }
+
+// テスト用データを生成して追加する
+  Future<void> addTestData(int count) async {
+    final db = await database;
+    final batch = db.batch();
+
+    // 現在の日付から逆算して過去のデータを作成
+    final now = DateTime.now();
+    final random = Random();
+
+    // テスト用のタスクを作成（存在しない場合）
+    int taskId = -1;
+    final testTasks = await db.query(
+      'tasks',
+      where: 'name = ?',
+      whereArgs: ['テスト用タスク'],
+    );
+
+    if (testTasks.isEmpty) {
+      taskId = await db.insert('tasks', {
+        'name': 'テスト用タスク',
+        'category': 'テスト',
+        'description': 'テスト用に自動生成されたタスクです',
+        'estimatedPomodoros': 20,
+        'completedPomodoros': 0,
+        'createdAt': now.toIso8601String(),
+        'updatedAt': now.toIso8601String(),
+      });
+    } else {
+      taskId = testTasks.first['id'] as int;
+    }
+
+    // ポモドーロセッションを追加
+    for (int i = 0; i < count; i++) {
+      // 過去のランダムな日付を設定（最大90日前まで）
+      final daysAgo = random.nextInt(90);
+      final sessionDate = now.subtract(Duration(days: daysAgo));
+
+      // 時間はランダム
+      final hour = random.nextInt(24);
+      final minute = random.nextInt(60);
+      final startTime = DateTime(
+        sessionDate.year,
+        sessionDate.month,
+        sessionDate.day,
+        hour,
+        minute,
+      );
+
+      // 25分後の終了時間
+      final endTime = startTime.add(const Duration(minutes: 25));
+
+      // 時間帯に応じたtimeOfDayを設定
+      String timeOfDay;
+      if (hour >= 5 && hour < 8) {
+        timeOfDay = 'morning';
+      } else if (hour >= 8 && hour < 12) {
+        timeOfDay = 'forenoon';
+      } else if (hour >= 12 && hour < 17) {
+        timeOfDay = 'afternoon';
+      } else if (hour >= 17 && hour < 20) {
+        timeOfDay = 'evening';
+      } else if (hour >= 20) {
+        timeOfDay = 'night';
+      } else {
+        timeOfDay = 'midnight';
+      }
+
+      // 集中度はランダム（70〜100%）
+      final focusScore = 70.0 + random.nextDouble() * 30.0;
+
+      // 中断回数はランダム（0〜3回）
+      final interruptionCount = random.nextInt(4);
+
+      // 気分はランダム
+      final moods = ['great', 'good', 'neutral', 'tired', 'frustrated'];
+      final mood = moods[random.nextInt(moods.length)];
+
+      // セッションデータを作成
+      batch.insert('pomodoro_sessions', {
+        'taskId': taskId,
+        'startTime': startTime.toIso8601String(),
+        'endTime': endTime.toIso8601String(),
+        'durationMinutes': 25,
+        'completed': 1,
+        'focusScore': focusScore,
+        'timeOfDay': timeOfDay,
+        'interruptionCount': interruptionCount,
+        'mood': mood,
+        'isBreak': 0,
+      });
+    }
+
+    // バッチ処理を実行
+    await batch.commit(noResult: true);
+
+    // タスクの完了ポモドーロ数を更新
+    final sessions = await db.query(
+      'pomodoro_sessions',
+      where: 'taskId = ?',
+      whereArgs: [taskId],
+    );
+
+    await db.update(
+      'tasks',
+      {'completedPomodoros': sessions.length},
+      where: 'id = ?',
+      whereArgs: [taskId],
+    );
+  }
+
+// テスト用データを削除する
+  Future<int> deleteTestData() async {
+    final db = await database;
+
+    // テスト用タスクを検索
+    final testTasks = await db.query(
+      'tasks',
+      where: 'name = ?',
+      whereArgs: ['テスト用タスク'],
+    );
+
+    if (testTasks.isEmpty) {
+      return 0; // テスト用タスクがなければ何もしない
+    }
+
+    final taskId = testTasks.first['id'] as int;
+
+    // このタスクに関連するポモドーロセッションを削除
+    final deletedSessions = await db.delete(
+      'pomodoro_sessions',
+      where: 'taskId = ?',
+      whereArgs: [taskId],
+    );
+
+    // テスト用タスク自体も削除
+    await db.delete(
+      'tasks',
+      where: 'id = ?',
+      whereArgs: [taskId],
+    );
+
+    return deletedSessions; // 削除したセッション数を返す
   }
 }
