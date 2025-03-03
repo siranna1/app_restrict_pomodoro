@@ -46,7 +46,7 @@ class RestrictedApp {
       'executablePath': executablePath,
       'allowedMinutesPerDay': allowedMinutesPerDay,
       'isRestricted': isRestricted ? 1 : 0,
-      'requiredPomodorosToUnlock': requiredPomodorosToUnlock,
+      'requiredPomodorosToUnlock': requiredPomodorosToUnlock ?? 0,
       'pointCostPerHour': pointCostPerHour,
       'minutesPerPoint': minutesPerPoint,
       'currentSessionEnd': currentSessionEnd?.toIso8601String(),
