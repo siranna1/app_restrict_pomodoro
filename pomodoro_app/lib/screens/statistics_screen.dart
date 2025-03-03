@@ -9,6 +9,9 @@ import '../services/database_helper.dart';
 import '../models/pomodoro_session.dart';
 import '../widgets/heat_map_calendar.dart';
 import '../widgets/category_chart.dart';
+import 'time_of_day_analysis.dart';
+import '../widgets/habit_score_card.dart';
+import '../widgets/long_term_trend.dart';
 
 class StatisticsScreen extends StatefulWidget {
   const StatisticsScreen({Key? key}) : super(key: key);
@@ -25,7 +28,7 @@ class _StatisticsScreenState extends State<StatisticsScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
   }
 
   @override
@@ -100,19 +103,19 @@ class _StatisticsScreenState extends State<StatisticsScreen>
           // オプション：メニューからも選択できるようにする
           PopupMenuButton(
             itemBuilder: (context) => [
-              PopupMenuItem(
+              const PopupMenuItem(
                 value: 'add_10',
                 child: Text('テストデータ10件追加'),
               ),
-              PopupMenuItem(
+              const PopupMenuItem(
                 value: 'add_30',
                 child: Text('テストデータ30件追加'),
               ),
-              PopupMenuItem(
+              const PopupMenuItem(
                 value: 'add_100',
                 child: Text('テストデータ100件追加'),
               ),
-              PopupMenuItem(
+              const PopupMenuItem(
                 value: 'delete',
                 child: Text('テストデータを削除'),
               ),
@@ -148,6 +151,7 @@ class _StatisticsScreenState extends State<StatisticsScreen>
             Tab(text: '週別'),
             Tab(text: 'タスク別'),
             Tab(text: 'カレンダー'),
+            Tab(text: '時間帯'),
           ],
         ),
       ),
@@ -158,6 +162,7 @@ class _StatisticsScreenState extends State<StatisticsScreen>
           WeeklyStatisticsTab(),
           TaskStatisticsTab(),
           CalendarStatisticsTab(),
+          TimeOfDayAnalysisTab(),
         ],
       ),
     );
