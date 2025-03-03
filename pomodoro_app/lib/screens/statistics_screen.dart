@@ -3,12 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/single_child_widget.dart';
 import '../providers/task_provider.dart';
 import '../services/database_helper.dart';
 import '../models/pomodoro_session.dart';
 import '../widgets/heat_map_calendar.dart';
 import '../widgets/category_chart.dart';
-import 'dart:math';
 
 class StatisticsScreen extends StatefulWidget {
   const StatisticsScreen({Key? key}) : super(key: key);
@@ -153,109 +153,103 @@ class DailyStatisticsTab extends StatelessWidget {
                 const SizedBox(height: 24),
 
                 // 日別グラフ
-                Expanded(
-                  child: Card(
-                    elevation: 4,
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '日別ポモドーロ完了数',
-                            style: Theme.of(context).textTheme.titleLarge,
-                          ),
-                          const SizedBox(height: 16),
-                          Expanded(
-                            child: SizedBox(
-                              width: max(MediaQuery.of(context).size.width,
-                                  100.0 * data.length), // データ数に応じた幅を確保
-                              height: 300,
-                              child: BarChart(
-                                BarChartData(
-                                  alignment: BarChartAlignment.spaceAround,
-                                  maxY: data
-                                          .map((e) => e['count'] as int)
-                                          .reduce((a, b) => a > b ? a : b) *
-                                      1.2,
-                                  barTouchData: BarTouchData(
-                                    enabled: true,
-                                    touchTooltipData: BarTouchTooltipData(
-                                      tooltipBgColor: Colors.blueGrey,
-                                      getTooltipItem:
-                                          (group, groupIndex, rod, rodIndex) {
-                                        final dateStr =
-                                            data[groupIndex]['date'] as String;
-                                        return BarTooltipItem(
-                                          '$dateStr\n',
-                                          const TextStyle(color: Colors.white),
-                                          children: <TextSpan>[
-                                            TextSpan(
-                                              text: '${rod.toY.round()} ポモドーロ',
-                                              style: const TextStyle(
-                                                color: Colors.yellow,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                          ],
-                                        );
-                                      },
-                                    ),
-                                  ),
-                                  titlesData: FlTitlesData(
-                                    show: true,
-                                    bottomTitles: AxisTitles(
-                                      sideTitles: SideTitles(
-                                        showTitles: true,
-                                        getTitlesWidget: (value, meta) {
-                                          final index = value.toInt();
-                                          if (index >= 0 &&
-                                              index < data.length) {
-                                            final date =
-                                                data[index]['date'] as String;
-                                            return Padding(
-                                              padding: const EdgeInsets.only(
-                                                  top: 8.0),
-                                              child: Text(
-                                                date.substring(5), // 月/日のみ表示
-                                                style: const TextStyle(
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
-                                            );
-                                          }
-                                          return const Text('');
-                                        },
-                                      ),
-                                    ),
-                                    leftTitles: AxisTitles(
-                                      sideTitles: SideTitles(
-                                        showTitles: true,
-                                        reservedSize: 30,
-                                        getTitlesWidget: (value, meta) {
-                                          if (value == 0) {
-                                            return const Text('0');
-                                          }
-                                          return Text(value.toInt().toString());
-                                        },
-                                      ),
-                                    ),
-                                    topTitles: AxisTitles(
-                                      sideTitles: SideTitles(showTitles: false),
-                                    ),
-                                    rightTitles: AxisTitles(
-                                      sideTitles: SideTitles(showTitles: false),
-                                    ),
-                                  ),
-                                  borderData: FlBorderData(show: false),
-                                  barGroups: barGroups,
+
+                Card(
+                  elevation: 4,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '日別ポモドーロ完了数',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        const SizedBox(height: 16),
+                        Container(
+                          height: 250,
+                          child: BarChart(
+                            BarChartData(
+                              alignment: BarChartAlignment.spaceAround,
+                              maxY: data
+                                      .map((e) => e['count'] as int)
+                                      .reduce((a, b) => a > b ? a : b) *
+                                  1.2,
+                              barTouchData: BarTouchData(
+                                enabled: true,
+                                touchTooltipData: BarTouchTooltipData(
+                                  tooltipBgColor: Colors.blueGrey,
+                                  getTooltipItem:
+                                      (group, groupIndex, rod, rodIndex) {
+                                    final dateStr =
+                                        data[groupIndex]['date'] as String;
+                                    return BarTooltipItem(
+                                      '$dateStr\n',
+                                      const TextStyle(color: Colors.white),
+                                      children: <TextSpan>[
+                                        TextSpan(
+                                          text: '${rod.toY.round()} ポモドーロ',
+                                          style: const TextStyle(
+                                            color: Colors.yellow,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ],
+                                    );
+                                  },
                                 ),
                               ),
+                              titlesData: FlTitlesData(
+                                show: true,
+                                bottomTitles: AxisTitles(
+                                  sideTitles: SideTitles(
+                                    showTitles: true,
+                                    getTitlesWidget: (value, meta) {
+                                      final index = value.toInt();
+                                      if (index >= 0 && index < data.length) {
+                                        final date =
+                                            data[index]['date'] as String;
+                                        return Padding(
+                                          padding:
+                                              const EdgeInsets.only(top: 8.0),
+                                          child: Text(
+                                            date.substring(5), // 月/日のみ表示
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        );
+                                      }
+                                      return const Text('');
+                                    },
+                                  ),
+                                ),
+                                leftTitles: AxisTitles(
+                                  sideTitles: SideTitles(
+                                    showTitles: true,
+                                    reservedSize: 30,
+                                    getTitlesWidget: (value, meta) {
+                                      if (value == 0) {
+                                        return const Text('0');
+                                      }
+                                      return Text(value.toInt().toString());
+                                    },
+                                  ),
+                                ),
+                                topTitles: AxisTitles(
+                                  sideTitles: SideTitles(showTitles: false),
+                                ),
+                                rightTitles: AxisTitles(
+                                  sideTitles: SideTitles(showTitles: false),
+                                ),
+                              ),
+                              borderData: FlBorderData(show: false),
+                              barGroups: barGroups,
                             ),
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -398,47 +392,47 @@ class WeeklyStatisticsTab extends StatelessWidget {
         final averagePomodoros =
             formattedData.isEmpty ? 0.0 : totalPomodoros / formattedData.length;
 
-        return Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // サマリーカード
-              Card(
-                elevation: 2,
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      _buildStatColumn(
-                        context,
-                        '$totalPomodoros',
-                        '週間合計',
-                        Icons.timer,
-                      ),
-                      _buildStatColumn(
-                        context,
-                        '${totalMinutes ~/ 60}時間',
-                        '合計時間',
-                        Icons.access_time,
-                      ),
-                      _buildStatColumn(
-                        context,
-                        averagePomodoros.toStringAsFixed(1),
-                        '週平均',
-                        Icons.trending_up,
-                      ),
-                    ],
+        return SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // サマリーカード
+                Card(
+                  elevation: 2,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _buildStatColumn(
+                          context,
+                          '$totalPomodoros',
+                          '週間合計',
+                          Icons.timer,
+                        ),
+                        _buildStatColumn(
+                          context,
+                          '${totalMinutes ~/ 60}時間',
+                          '合計時間',
+                          Icons.access_time,
+                        ),
+                        _buildStatColumn(
+                          context,
+                          averagePomodoros.toStringAsFixed(1),
+                          '週平均',
+                          Icons.trending_up,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
 
-              const SizedBox(height: 24),
+                const SizedBox(height: 24),
 
-              // 週別グラフ
-              Expanded(
-                child: Card(
+                // 週別グラフ
+                Card(
                   elevation: 4,
                   child: Padding(
                     padding: const EdgeInsets.all(16.0),
@@ -450,7 +444,8 @@ class WeeklyStatisticsTab extends StatelessWidget {
                           style: Theme.of(context).textTheme.titleLarge,
                         ),
                         const SizedBox(height: 16),
-                        Flexible(
+                        Container(
+                          height: 250,
                           child: BarChart(
                             BarChartData(
                               alignment: BarChartAlignment.spaceAround,
@@ -534,51 +529,51 @@ class WeeklyStatisticsTab extends StatelessWidget {
                     ),
                   ),
                 ),
-              ),
 
-              const SizedBox(height: 16),
+                const SizedBox(height: 16),
 
-              // 詳細データテーブル
-              Card(
-                elevation: 2,
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '詳細データ',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 8),
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: DataTable(
-                          columns: const [
-                            DataColumn(label: Text('週')),
-                            DataColumn(label: Text('ポモドーロ数')),
-                            DataColumn(label: Text('学習時間')),
-                          ],
-                          rows: formattedData.map((item) {
-                            final minutes = item['totalMinutes'] as int? ?? 0;
-                            final hours = minutes ~/ 60;
-                            final mins = minutes % 60;
-
-                            return DataRow(
-                              cells: [
-                                DataCell(Text('${item['displayWeek']}週')),
-                                DataCell(Text('${item['count']} 回')),
-                                DataCell(Text('$hours時間$mins分')),
-                              ],
-                            );
-                          }).toList(),
+                // 詳細データテーブル
+                Card(
+                  elevation: 2,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '詳細データ',
+                          style: Theme.of(context).textTheme.titleMedium,
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 8),
+                        SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: DataTable(
+                            columns: const [
+                              DataColumn(label: Text('週')),
+                              DataColumn(label: Text('ポモドーロ数')),
+                              DataColumn(label: Text('学習時間')),
+                            ],
+                            rows: formattedData.map((item) {
+                              final minutes = item['totalMinutes'] as int? ?? 0;
+                              final hours = minutes ~/ 60;
+                              final mins = minutes % 60;
+
+                              return DataRow(
+                                cells: [
+                                  DataCell(Text('${item['displayWeek']}週')),
+                                  DataCell(Text('${item['count']} 回')),
+                                  DataCell(Text('$hours時間$mins分')),
+                                ],
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },
