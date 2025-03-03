@@ -8,6 +8,7 @@ import '../models/app_usage_session.dart';
 import '../services/database_helper.dart';
 import 'app_restriction_screen.dart';
 import 'package:file_picker/file_picker.dart';
+import '../widgets/AddAppDialog.dart';
 
 class AppStoreScreen extends StatefulWidget {
   const AppStoreScreen({Key? key}) : super(key: key);
@@ -559,221 +560,66 @@ class SettingsTab extends StatelessWidget {
     );
   }
 
-  // アプリ追加ダイアログ
-  // アプリ追加ダイアログ - コントローラー適切管理版
+  // アプリ追加ダイアログ - カスタムウィジェット使用版
   Future<void> _showAddAppDialog(BuildContext context) async {
-    final formKey = GlobalKey<FormState>();
-
-    // ダイアログ内で使用するローカル変数
-    String? newName;
-    String? newPath;
-    int? newMinutesPerPoint;
-    bool? formValid;
-
-    // ダイアログを表示
-    await showDialog(
+    // ダイアログを表示してデータを取得
+    final result = await showDialog<Map<String, dynamic>>(
       context: context,
-      builder: (dialogContext) {
-        // このスコープ内でコントローラーを作成
-        final nameController = TextEditingController();
-        final pathController = TextEditingController();
-        final minutesController = TextEditingController(text: '30'); // デフォルト値
-
-        return PopScope(
-          canPop: false,
-          child: AlertDialog(
-            title: const Text('制限対象アプリを追加'),
-            content: Form(
-              key: formKey,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextFormField(
-                      controller: nameController,
-                      decoration: const InputDecoration(
-                        labelText: 'アプリ名',
-                        hintText: '例: ゲーム、SNSアプリなど',
-                      ),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'アプリ名を入力してください';
-                        }
-                        return null;
-                      },
-                      onSaved: (value) {
-                        newName = value;
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextFormField(
-                            controller: pathController,
-                            decoration: const InputDecoration(
-                              labelText: '実行ファイルパス',
-                              hintText: 'C:\\Program Files\\App\\app.exe',
-                            ),
-                            validator: (value) {
-                              if (value == null || value.isEmpty) {
-                                return '実行ファイルパスを入力してください';
-                              }
-                              return null;
-                            },
-                            onSaved: (value) {
-                              newPath = value;
-                            },
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.folder_open),
-                          onPressed: () async {
-                            final result = await FilePicker.platform.pickFiles(
-                              type: FileType.custom,
-                              allowedExtensions: ['exe'],
-                            );
-
-                            if (result != null && result.files.isNotEmpty) {
-                              pathController.text = result.files.first.path!;
-                            }
-                          },
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: minutesController,
-                      decoration: const InputDecoration(
-                        labelText: '1ポイントあたりの使用時間（分）',
-                        hintText: '例: 30',
-                      ),
-                      keyboardType: TextInputType.number,
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return '使用時間を入力してください';
-                        }
-                        final number = int.tryParse(value);
-                        if (number == null || number <= 0) {
-                          return '正の整数を入力してください';
-                        }
-                        return null;
-                      },
-                      onSaved: (value) {
-                        newMinutesPerPoint = int.tryParse(value ?? '');
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                    // 計算された値を表示（オプション）
-                    Builder(
-                      builder: (context) {
-                        final minutes =
-                            int.tryParse(minutesController.text) ?? 30;
-                        final pointsPerHour = (60 / minutes).ceil();
-                        return Text(
-                          '1時間 = $pointsPerHour ポイント',
-                          style: TextStyle(
-                            color: Colors.grey[600],
-                            fontSize: 14,
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            actions: [
-              TextButton(
-                child: const Text('キャンセル'),
-                onPressed: () {
-                  // コントローラーを破棄してからダイアログを閉じる
-                  nameController.dispose();
-                  pathController.dispose();
-                  minutesController.dispose();
-                  Navigator.of(dialogContext).pop();
-                },
-              ),
-              ElevatedButton(
-                child: const Text('追加'),
-                onPressed: () {
-                  // フォームの検証と保存
-                  formValid = formKey.currentState?.validate() ?? false;
-                  bool f = formValid!;
-                  if (f) {
-                    formKey.currentState?.save();
-
-                    // コントローラーを破棄
-                    nameController.dispose();
-                    pathController.dispose();
-                    minutesController.dispose();
-
-                    // ダイアログを閉じる
-                    Navigator.of(dialogContext).pop();
-                  }
-                },
-              ),
-            ],
-          ),
-        );
-      },
+      builder: (context) => const AddAppDialog(),
     );
 
-    // ダイアログが閉じられた後、有効なフォームデータがあれば追加処理を実行
-    if (formValid == true &&
-        newName != null &&
-        newPath != null &&
-        newMinutesPerPoint != null) {
-      try {
-        // プログレスインジケータを表示
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (BuildContext context) {
-            return const Center(
-              child: CircularProgressIndicator(),
-            );
-          },
+    // キャンセルされた場合
+    if (result == null) return;
+
+    try {
+      // プログレスインジケータを表示
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) {
+          return const Center(
+            child: CircularProgressIndicator(),
+          );
+        },
+      );
+
+      final provider =
+          Provider.of<AppRestrictionProvider>(context, listen: false);
+
+      // アプリを追加
+      final success = await provider.addRestrictedApp(RestrictedApp(
+        name: result['name'],
+        executablePath: result['path'],
+        allowedMinutesPerDay: 0,
+        isRestricted: true,
+        minutesPerPoint: result['minutesPerPoint'],
+        requiredPomodorosToUnlock: 0,
+      ));
+
+      // プログレスインジケータを閉じる
+      if (context.mounted) Navigator.of(context).pop();
+
+      // 結果メッセージ
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(success ? 'アプリを追加しました' : 'アプリの追加に失敗しました'),
+            backgroundColor: success ? Colors.green : Colors.red,
+          ),
         );
+      }
+    } catch (e) {
+      // プログレスインジケータを閉じる
+      if (context.mounted) Navigator.of(context).pop();
 
-        final provider =
-            Provider.of<AppRestrictionProvider>(context, listen: false);
-
-        // アプリを追加
-        final success = await provider.addRestrictedApp(RestrictedApp(
-          name: newName!,
-          executablePath: newPath!,
-          allowedMinutesPerDay: 0,
-          isRestricted: true,
-          minutesPerPoint: newMinutesPerPoint!,
-          requiredPomodorosToUnlock: 0, // デフォルト値を明示的に設定
-        ));
-
-        // プログレスインジケータを閉じる
-        if (context.mounted) Navigator.of(context).pop();
-
-        // 結果メッセージ
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(success ? 'アプリを追加しました' : 'アプリの追加に失敗しました'),
-              backgroundColor: success ? Colors.green : Colors.red,
-            ),
-          );
-        }
-      } catch (e) {
-        // プログレスインジケータを閉じる
-        if (context.mounted) Navigator.of(context).pop();
-
-        // エラーメッセージ
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('エラーが発生しました: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
+      // エラーメッセージ
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('エラーが発生しました: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     }
   }
