@@ -790,7 +790,7 @@ class DatabaseHelper {
       WHERE completed = 1
       GROUP BY date(startTime)
       ORDER BY date(startTime) DESC
-      LIMIT 7
+      LIMIT 3
     ''');
 
     return results.reversed.toList();
