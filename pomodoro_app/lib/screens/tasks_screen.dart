@@ -343,8 +343,49 @@ class _TasksScreenState extends State<TasksScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // 既存のフォームフィールド...
-
+                    TextFormField(
+                      decoration: const InputDecoration(
+                        labelText: 'タスク名',
+                      ),
+                      initialValue: name,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'タスク名を入力してください';
+                        }
+                        return null;
+                      },
+                      onSaved: (value) {
+                        name = value!;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      decoration: const InputDecoration(
+                        labelText: 'カテゴリー',
+                      ),
+                      initialValue: category,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'カテゴリーを入力してください';
+                        }
+                        return null;
+                      },
+                      onSaved: (value) {
+                        category = value!;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      decoration: const InputDecoration(
+                        labelText: '説明（任意）',
+                      ),
+                      initialValue: description,
+                      maxLines: 2,
+                      onSaved: (value) {
+                        description = value ?? '';
+                      },
+                    ),
+                    const SizedBox(height: 16),
                     // 予定ポモドーロ数の部分を修正
                     Row(
                       children: [
