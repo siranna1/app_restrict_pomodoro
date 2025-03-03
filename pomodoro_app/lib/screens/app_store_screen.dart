@@ -224,7 +224,7 @@ class AppStoreTab extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text('1ポイント = ${app.minutesPerPoint}分'),
-                          Text('1時間 = ${app.pointCostPerHour}ポイント'),
+                          //Text('1時間 = ${app.pointCostPerHour}ポイント'),
                         ],
                       ),
                     ),
@@ -246,156 +246,145 @@ class AppStoreTab extends StatelessWidget {
 
   // アプリ追加ダイアログ
   Future<void> _showAddAppDialog(BuildContext context) async {
-    // 既存のダイアログを使用
     final formKey = GlobalKey<FormState>();
-    String appName = '';
-    String executablePath = '';
-    int pointCostPerHour = 2;
-    int minutesPerPoint = 30;
+    final nameController = TextEditingController();
+    final pathController = TextEditingController();
+    final minutesController = TextEditingController(text: '30'); // デフォルト値
 
-    return showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('制限対象アプリを追加'),
-          content: Form(
-            key: formKey,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextFormField(
-                    decoration: const InputDecoration(
-                      labelText: 'アプリ名',
-                      hintText: '例: ゲーム、SNSアプリなど',
+    try {
+      return await showDialog(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            title: const Text('制限対象アプリを追加'),
+            content: Form(
+              key: formKey,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextFormField(
+                      controller: nameController,
+                      decoration: const InputDecoration(
+                        labelText: 'アプリ名',
+                        hintText: '例: ゲーム、SNSアプリなど',
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'アプリ名を入力してください';
+                        }
+                        return null;
+                      },
                     ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'アプリ名を入力してください';
-                      }
-                      return null;
-                    },
-                    onSaved: (value) {
-                      appName = value!;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextFormField(
-                          decoration: const InputDecoration(
-                            labelText: '実行ファイルパス',
-                            hintText: 'C:\\Program Files\\App\\app.exe',
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: pathController,
+                            decoration: const InputDecoration(
+                              labelText: '実行ファイルパス',
+                              hintText: 'C:\\Program Files\\App\\app.exe',
+                            ),
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return '実行ファイルパスを入力してください';
+                              }
+                              return null;
+                            },
                           ),
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return '実行ファイルパスを入力してください';
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.folder_open),
+                          onPressed: () async {
+                            final result = await FilePicker.platform.pickFiles(
+                              type: FileType.custom,
+                              allowedExtensions: ['exe'],
+                            );
+
+                            if (result != null && result.files.isNotEmpty) {
+                              pathController.text = result.files.first.path!;
                             }
-                            return null;
-                          },
-                          onSaved: (value) {
-                            executablePath = value!;
                           },
                         ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.folder_open),
-                        onPressed: () async {
-                          final result = await FilePicker.platform.pickFiles(
-                            type: FileType.custom,
-                            allowedExtensions: ['exe'],
-                          );
-
-                          if (result != null && result.files.isNotEmpty) {
-                            executablePath = result.files.first.path!;
-                            // フォームフィールドを更新するには、コントローラーを使用する必要があります
-                          }
-                        },
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    decoration: const InputDecoration(
-                      labelText: '1時間あたりのポイントコスト',
-                      hintText: '例: 2',
+                      ],
                     ),
-                    keyboardType: TextInputType.number,
-                    initialValue: '2',
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'ポイントコストを入力してください';
-                      }
-                      final number = int.tryParse(value);
-                      if (number == null || number <= 0) {
-                        return '正の整数を入力してください';
-                      }
-                      return null;
-                    },
-                    onSaved: (value) {
-                      pointCostPerHour = int.parse(value!);
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    decoration: const InputDecoration(
-                      labelText: '1ポイントあたりの分数',
-                      hintText: '例: 30',
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: minutesController,
+                      decoration: const InputDecoration(
+                        labelText: '1ポイントあたりの使用時間（分）',
+                        hintText: '例: 30',
+                      ),
+                      keyboardType: TextInputType.number,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return '使用時間を入力してください';
+                        }
+                        final number = int.tryParse(value);
+                        if (number == null || number <= 0) {
+                          return '正の整数を入力してください';
+                        }
+                        return null;
+                      },
                     ),
-                    keyboardType: TextInputType.number,
-                    initialValue: '30',
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return '分数を入力してください';
-                      }
-                      final number = int.tryParse(value);
-                      if (number == null || number <= 0) {
-                        return '正の整数を入力してください';
-                      }
-                      return null;
-                    },
-                    onSaved: (value) {
-                      minutesPerPoint = int.parse(value!);
-                    },
-                  ),
-                ],
+                    const SizedBox(height: 8),
+                    // 計算された値を表示（オプション）
+                    Builder(
+                      builder: (context) {
+                        final minutes =
+                            int.tryParse(minutesController.text) ?? 30;
+                        final pointsPerHour = (60 / minutes).ceil();
+                        return Text(
+                          '1時間 = $pointsPerHour ポイント',
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 14,
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-          actions: [
-            TextButton(
-              child: const Text('キャンセル'),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-            ),
-            ElevatedButton(
-              child: const Text('追加'),
-              onPressed: () {
-                if (formKey.currentState!.validate()) {
-                  formKey.currentState!.save();
-
-                  final provider = Provider.of<AppRestrictionProvider>(context,
-                      listen: false);
-
-                  provider.addRestrictedApp(RestrictedApp(
-                    name: appName,
-                    executablePath: executablePath,
-                    allowedMinutesPerDay: 0,
-                    isRestricted: true,
-                    pointCostPerHour: pointCostPerHour,
-                    minutesPerPoint: minutesPerPoint,
-                  ));
-
+            actions: [
+              TextButton(
+                child: const Text('キャンセル'),
+                onPressed: () {
                   Navigator.of(context).pop();
-                }
-              },
-            ),
-          ],
-        );
-      },
-    );
+                },
+              ),
+              ElevatedButton(
+                child: const Text('追加'),
+                onPressed: () {
+                  if (formKey.currentState!.validate()) {
+                    final provider = Provider.of<AppRestrictionProvider>(
+                        context,
+                        listen: false);
+
+                    provider.addRestrictedApp(RestrictedApp(
+                      name: nameController.text,
+                      executablePath: pathController.text,
+                      allowedMinutesPerDay: 0,
+                      isRestricted: true,
+                      minutesPerPoint: int.parse(minutesController.text),
+                    ));
+
+                    Navigator.of(context).pop();
+                  }
+                },
+              ),
+            ],
+          );
+        },
+      );
+    } finally {
+      // コントローラーの破棄
+      nameController.dispose();
+      pathController.dispose();
+      minutesController.dispose();
+    }
   }
 
   // アプリ解除ダイアログ
@@ -403,14 +392,16 @@ class AppStoreTab extends StatelessWidget {
     final appRestrictionProvider =
         Provider.of<AppRestrictionProvider>(context, listen: false);
     int selectedPoints = 1;
+    final minutesController = TextEditingController(text: '1');
 
     showDialog(
       context: context,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setState) {
-            final minutes = selectedPoints * app.minutesPerPoint;
-
+            // ポイント数に基づいて解除時間を計算
+            final points = selectedPoints;
+            final minutes = points * app.minutesPerPoint;
             return AlertDialog(
               title: Text('${app.name}を解除'),
               content: Column(
@@ -447,6 +438,15 @@ class AppStoreTab extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text('解除時間: $minutes 分間'),
+                  const SizedBox(height: 4),
+                  // 情報追加：時間あたりのポイント消費率を表示（オプション）
+                  Text(
+                    '(1ポイント = ${app.minutesPerPoint}分 / 1時間 = ${app.pointCostPerHour}ポイント)',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey[600],
+                    ),
+                  ),
                   const SizedBox(height: 8),
                   Text(
                     '利用可能ポイント: ${appRestrictionProvider.availablePoints}',
@@ -559,319 +559,449 @@ class SettingsTab extends StatelessWidget {
     );
   }
 
-  // アプリ追加・編集ダイアログ（既存のコードを使用）
+  // アプリ追加ダイアログ
+  // アプリ追加ダイアログ - コントローラー適切管理版
   Future<void> _showAddAppDialog(BuildContext context) async {
     final formKey = GlobalKey<FormState>();
-    String appName = '';
-    String executablePath = '';
-    int pointCostPerHour = 2;
-    int minutesPerPoint = 30;
 
-    return showDialog(
+    // ダイアログ内で使用するローカル変数
+    String? newName;
+    String? newPath;
+    int? newMinutesPerPoint;
+    bool? formValid;
+
+    // ダイアログを表示
+    await showDialog(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('制限対象アプリを追加'),
-          content: Form(
-            key: formKey,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextFormField(
-                    decoration: const InputDecoration(
-                      labelText: 'アプリ名',
-                      hintText: '例: ゲーム、SNSアプリなど',
+      builder: (dialogContext) {
+        // このスコープ内でコントローラーを作成
+        final nameController = TextEditingController();
+        final pathController = TextEditingController();
+        final minutesController = TextEditingController(text: '30'); // デフォルト値
+
+        return PopScope(
+          canPop: false,
+          child: AlertDialog(
+            title: const Text('制限対象アプリを追加'),
+            content: Form(
+              key: formKey,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextFormField(
+                      controller: nameController,
+                      decoration: const InputDecoration(
+                        labelText: 'アプリ名',
+                        hintText: '例: ゲーム、SNSアプリなど',
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'アプリ名を入力してください';
+                        }
+                        return null;
+                      },
+                      onSaved: (value) {
+                        newName = value;
+                      },
                     ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'アプリ名を入力してください';
-                      }
-                      return null;
-                    },
-                    onSaved: (value) {
-                      appName = value!;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextFormField(
-                          decoration: const InputDecoration(
-                            labelText: '実行ファイルパス',
-                            hintText: 'C:\\Program Files\\App\\app.exe',
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: pathController,
+                            decoration: const InputDecoration(
+                              labelText: '実行ファイルパス',
+                              hintText: 'C:\\Program Files\\App\\app.exe',
+                            ),
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return '実行ファイルパスを入力してください';
+                              }
+                              return null;
+                            },
+                            onSaved: (value) {
+                              newPath = value;
+                            },
                           ),
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return '実行ファイルパスを入力してください';
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.folder_open),
+                          onPressed: () async {
+                            final result = await FilePicker.platform.pickFiles(
+                              type: FileType.custom,
+                              allowedExtensions: ['exe'],
+                            );
+
+                            if (result != null && result.files.isNotEmpty) {
+                              pathController.text = result.files.first.path!;
                             }
-                            return null;
-                          },
-                          onSaved: (value) {
-                            executablePath = value!;
                           },
                         ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.folder_open),
-                        onPressed: () async {
-                          final result = await FilePicker.platform.pickFiles(
-                            type: FileType.custom,
-                            allowedExtensions: ['exe'],
-                          );
-
-                          if (result != null && result.files.isNotEmpty) {
-                            executablePath = result.files.first.path!;
-                            // フォームフィールドを更新するには、コントローラーを使用する必要があります
-                          }
-                        },
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    decoration: const InputDecoration(
-                      labelText: '1時間あたりのポイントコスト',
-                      hintText: '例: 2',
+                      ],
                     ),
-                    keyboardType: TextInputType.number,
-                    initialValue: '2',
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'ポイントコストを入力してください';
-                      }
-                      final number = int.tryParse(value);
-                      if (number == null || number <= 0) {
-                        return '正の整数を入力してください';
-                      }
-                      return null;
-                    },
-                    onSaved: (value) {
-                      pointCostPerHour = int.parse(value!);
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    decoration: const InputDecoration(
-                      labelText: '1ポイントあたりの分数',
-                      hintText: '例: 30',
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: minutesController,
+                      decoration: const InputDecoration(
+                        labelText: '1ポイントあたりの使用時間（分）',
+                        hintText: '例: 30',
+                      ),
+                      keyboardType: TextInputType.number,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return '使用時間を入力してください';
+                        }
+                        final number = int.tryParse(value);
+                        if (number == null || number <= 0) {
+                          return '正の整数を入力してください';
+                        }
+                        return null;
+                      },
+                      onSaved: (value) {
+                        newMinutesPerPoint = int.tryParse(value ?? '');
+                      },
                     ),
-                    keyboardType: TextInputType.number,
-                    initialValue: '30',
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return '分数を入力してください';
-                      }
-                      final number = int.tryParse(value);
-                      if (number == null || number <= 0) {
-                        return '正の整数を入力してください';
-                      }
-                      return null;
-                    },
-                    onSaved: (value) {
-                      minutesPerPoint = int.parse(value!);
-                    },
-                  ),
-                ],
+                    const SizedBox(height: 8),
+                    // 計算された値を表示（オプション）
+                    Builder(
+                      builder: (context) {
+                        final minutes =
+                            int.tryParse(minutesController.text) ?? 30;
+                        final pointsPerHour = (60 / minutes).ceil();
+                        return Text(
+                          '1時間 = $pointsPerHour ポイント',
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 14,
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
               ),
             ),
+            actions: [
+              TextButton(
+                child: const Text('キャンセル'),
+                onPressed: () {
+                  // コントローラーを破棄してからダイアログを閉じる
+                  nameController.dispose();
+                  pathController.dispose();
+                  minutesController.dispose();
+                  Navigator.of(dialogContext).pop();
+                },
+              ),
+              ElevatedButton(
+                child: const Text('追加'),
+                onPressed: () {
+                  // フォームの検証と保存
+                  formValid = formKey.currentState?.validate() ?? false;
+                  bool f = formValid!;
+                  if (f) {
+                    formKey.currentState?.save();
+
+                    // コントローラーを破棄
+                    nameController.dispose();
+                    pathController.dispose();
+                    minutesController.dispose();
+
+                    // ダイアログを閉じる
+                    Navigator.of(dialogContext).pop();
+                  }
+                },
+              ),
+            ],
           ),
-          actions: [
-            TextButton(
-              child: const Text('キャンセル'),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-            ),
-            ElevatedButton(
-              child: const Text('追加'),
-              onPressed: () {
-                if (formKey.currentState!.validate()) {
-                  formKey.currentState!.save();
-
-                  final provider = Provider.of<AppRestrictionProvider>(context,
-                      listen: false);
-
-                  provider.addRestrictedApp(RestrictedApp(
-                    name: appName,
-                    executablePath: executablePath,
-                    allowedMinutesPerDay: 0,
-                    isRestricted: true,
-                    pointCostPerHour: pointCostPerHour,
-                    minutesPerPoint: minutesPerPoint,
-                  ));
-
-                  Navigator.of(context).pop();
-                }
-              },
-            ),
-          ],
         );
       },
     );
+
+    // ダイアログが閉じられた後、有効なフォームデータがあれば追加処理を実行
+    if (formValid == true &&
+        newName != null &&
+        newPath != null &&
+        newMinutesPerPoint != null) {
+      try {
+        // プログレスインジケータを表示
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (BuildContext context) {
+            return const Center(
+              child: CircularProgressIndicator(),
+            );
+          },
+        );
+
+        final provider =
+            Provider.of<AppRestrictionProvider>(context, listen: false);
+
+        // アプリを追加
+        final success = await provider.addRestrictedApp(RestrictedApp(
+          name: newName!,
+          executablePath: newPath!,
+          allowedMinutesPerDay: 0,
+          isRestricted: true,
+          minutesPerPoint: newMinutesPerPoint!,
+          requiredPomodorosToUnlock: 0, // デフォルト値を明示的に設定
+        ));
+
+        // プログレスインジケータを閉じる
+        if (context.mounted) Navigator.of(context).pop();
+
+        // 結果メッセージ
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(success ? 'アプリを追加しました' : 'アプリの追加に失敗しました'),
+              backgroundColor: success ? Colors.green : Colors.red,
+            ),
+          );
+        }
+      } catch (e) {
+        // プログレスインジケータを閉じる
+        if (context.mounted) Navigator.of(context).pop();
+
+        // エラーメッセージ
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('エラーが発生しました: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
   }
 
-  // アプリ編集ダイアログ
+  // アプリ編集ダイアログ - コントローラー適切管理版
   Future<void> _showEditAppDialog(
       BuildContext context, RestrictedApp app) async {
     final formKey = GlobalKey<FormState>();
-    String appName = app.name;
-    String executablePath = app.executablePath;
-    int pointCostPerHour = app.pointCostPerHour ?? 2;
-    int minutesPerPoint = app.minutesPerPoint ?? 30;
 
-    return showDialog(
+    // ダイアログ内で使用するローカル変数
+    String? updatedName;
+    String? updatedPath;
+    int? updatedMinutesPerPoint;
+    bool? formValid;
+
+    // ダイアログを表示
+    await showDialog(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('制限対象アプリを編集'),
-          content: Form(
-            key: formKey,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextFormField(
-                    decoration: const InputDecoration(
-                      labelText: 'アプリ名',
+      builder: (dialogContext) {
+        // このスコープ内でコントローラーを作成
+        final nameController = TextEditingController(text: app.name);
+        final pathController = TextEditingController(text: app.executablePath);
+        final minutesController =
+            TextEditingController(text: app.minutesPerPoint.toString());
+
+        return PopScope(
+          canPop: false,
+          child: AlertDialog(
+            title: const Text('制限対象アプリを編集'),
+            content: Form(
+              key: formKey,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextFormField(
+                      controller: nameController,
+                      decoration: const InputDecoration(
+                        labelText: 'アプリ名',
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'アプリ名を入力してください';
+                        }
+                        return null;
+                      },
+                      onSaved: (value) {
+                        updatedName = value;
+                      },
                     ),
-                    initialValue: appName,
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'アプリ名を入力してください';
-                      }
-                      return null;
-                    },
-                    onSaved: (value) {
-                      appName = value!;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextFormField(
-                          decoration: const InputDecoration(
-                            labelText: '実行ファイルパス',
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: pathController,
+                            decoration: const InputDecoration(
+                              labelText: '実行ファイルパス',
+                            ),
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return '実行ファイルパスを入力してください';
+                              }
+                              return null;
+                            },
+                            onSaved: (value) {
+                              updatedPath = value;
+                            },
                           ),
-                          initialValue: executablePath,
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return '実行ファイルパスを入力してください';
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.folder_open),
+                          onPressed: () async {
+                            final result = await FilePicker.platform.pickFiles(
+                              type: FileType.custom,
+                              allowedExtensions: ['exe'],
+                            );
+
+                            if (result != null && result.files.isNotEmpty) {
+                              pathController.text = result.files.first.path!;
                             }
-                            return null;
-                          },
-                          onSaved: (value) {
-                            executablePath = value!;
                           },
                         ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.folder_open),
-                        onPressed: () async {
-                          final result = await FilePicker.platform.pickFiles(
-                            type: FileType.custom,
-                            allowedExtensions: ['exe'],
-                          );
-
-                          if (result != null && result.files.isNotEmpty) {
-                            executablePath = result.files.first.path!;
-                            // フォームフィールドを更新するには、コントローラーを使用する必要があります
-                          }
-                        },
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    decoration: const InputDecoration(
-                      labelText: '1時間あたりのポイントコスト',
+                      ],
                     ),
-                    keyboardType: TextInputType.number,
-                    initialValue: pointCostPerHour.toString(),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'ポイントコストを入力してください';
-                      }
-                      final number = int.tryParse(value);
-                      if (number == null || number <= 0) {
-                        return '正の整数を入力してください';
-                      }
-                      return null;
-                    },
-                    onSaved: (value) {
-                      pointCostPerHour = int.parse(value!);
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    decoration: const InputDecoration(
-                      labelText: '1ポイントあたりの分数',
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: minutesController,
+                      decoration: const InputDecoration(
+                        labelText: '1ポイントあたりの使用時間（分）',
+                      ),
+                      keyboardType: TextInputType.number,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return '使用時間を入力してください';
+                        }
+                        final number = int.tryParse(value);
+                        if (number == null || number <= 0) {
+                          return '正の整数を入力してください';
+                        }
+                        return null;
+                      },
+                      onSaved: (value) {
+                        updatedMinutesPerPoint = int.tryParse(value ?? '');
+                      },
                     ),
-                    keyboardType: TextInputType.number,
-                    initialValue: minutesPerPoint.toString(),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return '分数を入力してください';
-                      }
-                      final number = int.tryParse(value);
-                      if (number == null || number <= 0) {
-                        return '正の整数を入力してください';
-                      }
-                      return null;
-                    },
-                    onSaved: (value) {
-                      minutesPerPoint = int.parse(value!);
-                    },
-                  ),
-                ],
+                    const SizedBox(height: 8),
+                    // 計算された値を表示（オプション）
+                    Builder(
+                      builder: (context) {
+                        final minutes =
+                            int.tryParse(minutesController.text) ?? 30;
+                        final pointsPerHour = (60 / minutes).ceil();
+                        return Text(
+                          '1時間 = $pointsPerHour ポイント',
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 14,
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-          actions: [
-            TextButton(
-              child: const Text('キャンセル'),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-            ),
-            TextButton(
-              child: const Text('削除'),
-              style: TextButton.styleFrom(
-                foregroundColor: Colors.red,
+            actions: [
+              TextButton(
+                child: const Text('キャンセル'),
+                onPressed: () {
+                  // コントローラーを破棄してからダイアログを閉じる
+                  nameController.dispose();
+                  pathController.dispose();
+                  minutesController.dispose();
+                  Navigator.of(dialogContext).pop();
+                },
               ),
-              onPressed: () {
-                final provider =
-                    Provider.of<AppRestrictionProvider>(context, listen: false);
-                provider.removeRestrictedApp(app.id!);
-                Navigator.of(context).pop();
-              },
-            ),
-            ElevatedButton(
-              child: const Text('保存'),
-              onPressed: () {
-                if (formKey.currentState!.validate()) {
-                  formKey.currentState!.save();
+              TextButton(
+                child: const Text('削除'),
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.red,
+                ),
+                onPressed: () async {
+                  // コントローラーを破棄
+                  nameController.dispose();
+                  pathController.dispose();
+                  minutesController.dispose();
 
                   final provider = Provider.of<AppRestrictionProvider>(context,
                       listen: false);
 
-                  provider.updateRestrictedApp(app.copyWith(
-                    name: appName,
-                    executablePath: executablePath,
-                    pointCostPerHour: pointCostPerHour,
-                    minutesPerPoint: minutesPerPoint,
-                  ));
+                  // ダイアログを閉じる
+                  Navigator.of(dialogContext).pop();
 
-                  Navigator.of(context).pop();
-                }
-              },
-            ),
-          ],
+                  try {
+                    // アプリを削除
+                    await provider.removeRestrictedApp(app.id!);
+
+                    // 成功メッセージ
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('${app.name}を削除しました')),
+                    );
+                  } catch (e) {
+                    // エラーメッセージ
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('削除中にエラーが発生しました: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                },
+              ),
+              ElevatedButton(
+                child: const Text('保存'),
+                onPressed: () {
+                  // フォームの検証と保存
+                  formValid = formKey.currentState?.validate() ?? false;
+                  bool formValidcpy = formValid ?? false;
+                  if (formValidcpy) {
+                    formKey.currentState?.save();
+
+                    // コントローラーを破棄
+                    //nameController.dispose();
+                    //pathController.dispose();
+                    //minutesController.dispose();
+
+                    // ダイアログを閉じる
+                    Navigator.of(dialogContext).pop();
+                  }
+                },
+              ),
+            ],
+          ),
         );
       },
     );
+
+    // ダイアログが閉じられた後、有効なフォームデータがあれば更新処理を実行
+    if (formValid == true &&
+        updatedName != null &&
+        updatedPath != null &&
+        updatedMinutesPerPoint != null) {
+      try {
+        final provider =
+            Provider.of<AppRestrictionProvider>(context, listen: false);
+
+        // アプリを更新
+        await provider.updateRestrictedApp(app.copyWith(
+          name: updatedName,
+          executablePath: updatedPath,
+          minutesPerPoint: updatedMinutesPerPoint,
+        ));
+
+        // 成功メッセージ
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('アプリ設定を更新しました')),
+        );
+      } catch (e) {
+        // エラーメッセージ
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('更新中にエラーが発生しました: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 }
 

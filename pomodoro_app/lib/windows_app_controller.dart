@@ -213,26 +213,69 @@ class WindowsAppController {
 
   // 制限対象アプリを追加
   Future<void> addRestrictedApp(RestrictedApp app) async {
-    final db = await DatabaseHelper.instance.database;
-    final id = await db.insert('restricted_apps', app.toMap());
+    try {
+      print("WindowsAppController: アプリ追加開始");
 
-    final newApp = app.copyWith(id: id);
-    _restrictedApps.add(newApp);
+      final db = await DatabaseHelper.instance.database;
+      final Map<String, dynamic> appMap = app.toMap();
+
+      // requiredPomodorosToUnlockフィールドに値が確実に設定されていることを確認
+      if (appMap['requiredPomodorosToUnlock'] == null) {
+        appMap['requiredPomodorosToUnlock'] = 0; // デフォルト値を設定
+      }
+
+      final id = await db.insert('restricted_apps', appMap);
+      print("WindowsAppController: 追加されたアプリのID: $id");
+
+      // 新しいアプリをIDを付けてメモリ内リストに追加
+      final newApp = app.copyWith(id: id);
+      _restrictedApps.add(newApp);
+      print("WindowsAppController: メモリ内リスト更新完了");
+    } catch (e) {
+      print("WindowsAppController: アプリ追加中にエラー発生: $e");
+      // エラーを再スロー
+      rethrow;
+    }
   }
 
   // 制限対象アプリを更新
   Future<void> updateRestrictedApp(RestrictedApp app) async {
-    final db = await DatabaseHelper.instance.database;
-    await db.update(
-      'restricted_apps',
-      app.toMap(),
-      where: 'id = ?',
-      whereArgs: [app.id],
-    );
+    try {
+      app.toMap();
+      print("WindowsAppController: アプリ更新開始 ID=${app.id}");
 
-    final index = _restrictedApps.indexWhere((a) => a.id == app.id);
-    if (index >= 0) {
-      _restrictedApps[index] = app;
+      // IDが存在することを確認
+      if (app.id == null) {
+        print("WindowsAppController: エラー - IDがnullです");
+        return;
+      }
+
+      final db = await DatabaseHelper.instance.database;
+
+      final updateResult = await db.update(
+        'restricted_apps',
+        app.toMap(),
+        where: 'id = ?',
+        whereArgs: [app.id],
+      );
+
+      print("WindowsAppController: 更新された行数: $updateResult");
+
+      if (updateResult == 0) {
+        print("WindowsAppController: 警告 - 更新対象のレコードが見つかりません ID=${app.id}");
+      }
+
+      // メモリ内リストも更新
+      final index = _restrictedApps.indexWhere((a) => a.id == app.id);
+      if (index >= 0) {
+        _restrictedApps[index] = app;
+        print("WindowsAppController: メモリ内リスト更新完了");
+      } else {
+        print("WindowsAppController: 警告 - メモリ内リストに該当アプリがありません");
+      }
+    } catch (e) {
+      print("WindowsAppController: アプリ更新中にエラー発生: $e");
+      rethrow;
     }
   }
 

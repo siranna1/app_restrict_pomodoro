@@ -111,15 +111,47 @@ class AppRestrictionProvider with ChangeNotifier {
   }
 
   // 制限対象アプリを追加
-  Future<void> addRestrictedApp(RestrictedApp app) async {
-    await _windowsAppController.addRestrictedApp(app);
-    await _loadRestrictedApps();
+  Future<bool> addRestrictedApp(RestrictedApp app) async {
+    try {
+      print("アプリ追加開始: 名前=${app.name}");
+
+      // データベース追加
+      await _windowsAppController.addRestrictedApp(app);
+
+      // 追加成功後にリストを再読み込み
+      await _loadRestrictedApps();
+
+      print("アプリ追加完了: ${app.name}");
+      return true;
+    } catch (e) {
+      print("アプリ追加中にエラーが発生しました: $e");
+      return false;
+    }
   }
 
   // 制限対象アプリを更新
   Future<void> updateRestrictedApp(RestrictedApp app) async {
-    await _windowsAppController.updateRestrictedApp(app);
-    await _loadRestrictedApps();
+    try {
+      print("アプリ更新開始: ID=${app.id}, 名前=${app.name}");
+
+      // IDが存在することを確認
+      if (app.id == null) {
+        print("エラー: アプリIDがnullです");
+        return;
+      }
+
+      // データベース更新
+      await _windowsAppController.updateRestrictedApp(app);
+
+      // 更新成功後にリストを再読み込み
+      await _loadRestrictedApps();
+
+      print("アプリ更新完了: ${app.name}");
+    } catch (e) {
+      print("アプリ更新中にエラーが発生しました: $e");
+      // エラーを再スロー（UIでキャッチできるように）
+      rethrow;
+    }
   }
 
   // 制限対象アプリを削除

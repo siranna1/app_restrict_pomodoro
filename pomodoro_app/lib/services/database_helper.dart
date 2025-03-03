@@ -931,6 +931,35 @@ class DatabaseHelper {
     return results.map((map) => AppUsageSession.fromMap(map)).toList();
   }
 
+  // 制限アプリの追加にトランザクションを使用
+  Future<int> insertRestrictedApp(RestrictedApp app) async {
+    final db = await database;
+    int id = 0;
+
+    await db.transaction((txn) async {
+      id = await txn.insert('restricted_apps', app.toMap());
+    });
+
+    return id;
+  }
+
+// 制限アプリの更新にトランザクションを使用
+  Future<int> updateRestrictedApp(RestrictedApp app) async {
+    final db = await database;
+    int result = 0;
+
+    await db.transaction((txn) async {
+      result = await txn.update(
+        'restricted_apps',
+        app.toMap(),
+        where: 'id = ?',
+        whereArgs: [app.id],
+      );
+    });
+
+    return result;
+  }
+
 // テスト用データを生成して追加する
   Future<void> addTestData(int count) async {
     final db = await database;
@@ -1073,5 +1102,26 @@ class DatabaseHelper {
     );
 
     return deletedSessions; // 削除したセッション数を返す
+  }
+
+// デバッグ用に制限アプリテーブル内容を表示
+  Future<void> debugPrintRestrictedApps() async {
+    final db = await database;
+    final results = await db.query('restricted_apps');
+
+    print("=== 制限アプリテーブル内容 ===");
+    print("件数: ${results.length}");
+
+    for (var row in results) {
+      print("------------------------------");
+      print("ID: ${row['id']}");
+      print("名前: ${row['name']}");
+      print("パス: ${row['executablePath']}");
+      print("制限状態: ${row['isRestricted']}");
+      print("ポモドーロ: ${row['requiredPomodorosToUnlock']}");
+      print("ポイント/時間: ${row['pointCostPerHour']}");
+      print("分/ポイント: ${row['minutesPerPoint']}");
+    }
+    print("==============================");
   }
 }
