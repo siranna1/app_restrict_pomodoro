@@ -846,6 +846,38 @@ class DatabaseHelper {
     ''');
   }
 
+// 短期統計の要約を取得（過去30日間）
+  Future<Map<String, dynamic>> getShortTermSummary() async {
+    final db = await database;
+    final now = DateTime.now();
+    final thirtyDaysAgo = now.subtract(const Duration(days: 30));
+
+    final results = await db.rawQuery('''
+    SELECT 
+      COUNT(*) as count,
+      SUM(durationMinutes) as totalMinutes,
+      COUNT(DISTINCT date(startTime)) as activeDays
+    FROM pomodoro_sessions
+    WHERE startTime BETWEEN ? AND ?
+      AND completed = 1
+      AND isBreak = 0
+  ''', [thirtyDaysAgo.toIso8601String(), now.toIso8601String()]);
+
+    final totalPomodoros = results.first['count'] as int? ?? 0;
+    final totalMinutes = results.first['totalMinutes'] as int? ?? 0;
+    final activeDays = results.first['activeDays'] as int? ?? 0;
+
+    final avgDailyPomodoros =
+        activeDays > 0 ? totalPomodoros / activeDays : 0.0;
+
+    return {
+      'totalPomodoros': totalPomodoros,
+      'totalMinutes': totalMinutes,
+      'activeDays': activeDays,
+      'avgDailyPomodoros': avgDailyPomodoros,
+    };
+  }
+
 // ポイント関連のCRUD操作
   Future<RewardPoint> getRewardPoints() async {
     try {
