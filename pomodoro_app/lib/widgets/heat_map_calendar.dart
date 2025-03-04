@@ -38,88 +38,98 @@ class HeatMapCalendar extends StatelessWidget {
     this.weekLabels = const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
   }) : super(key: key);
 
+  // widgets/heat_map_calendar.dart の build メソッドを修正
+
   @override
   Widget build(BuildContext context) {
     // 最大セッション数を取得
-    final maxCount = dailyCounts.isEmpty
-        ? 1
-        : dailyCounts.values.reduce((max, value) => max > value ? max : value);
-
+    // final maxCount = dailyCounts.isEmpty
+    //     ? 1
+    //     : dailyCounts.values.reduce((max, value) => max > value ? max : value);
+    final maxCount = 10;
     // 表示する月のリストを生成
     final monthList = _generateMonthList();
 
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 凡例
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8.0, left: 40.0),
-            child: Row(
-              children: [
-                const Text('少'),
-                const SizedBox(width: 4),
-                for (int i = 0; i < 5; i++)
-                  Container(
-                    width: 15,
-                    height: 15,
-                    margin: const EdgeInsets.symmetric(horizontal: 2),
-                    color: _getColor(i * (maxCount / 4).ceil(), maxCount),
-                  ),
-                const SizedBox(width: 4),
-                const Text('多'),
-              ],
-            ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 凡例 - スクロールエリアの外に配置
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8.0, left: 40.0),
+          child: Row(
+            children: [
+              const Text('少'),
+              const SizedBox(width: 4),
+              for (int i = 0; i < 5; i++)
+                Container(
+                  width: 15,
+                  height: 15,
+                  margin: const EdgeInsets.symmetric(horizontal: 2),
+                  color: _getColor(i * (maxCount / 4).ceil(), maxCount),
+                ),
+              const SizedBox(width: 4),
+              const Text('多'),
+            ],
           ),
+        ),
 
-          // 曜日ラベル
-          Padding(
-            padding: const EdgeInsets.only(left: 40.0),
-            child: Row(
-              children: [
-                const SizedBox(width: 2),
-                ...List.generate(7, (index) {
-                  return SizedBox(
-                    width: 15,
-                    child: Text(
-                      weekLabels[index],
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: Colors.grey[600],
-                      ),
-                      textAlign: TextAlign.center,
+        // 曜日ラベル - これもスクロールエリアの外に配置
+        Padding(
+          padding: const EdgeInsets.only(left: 40.0),
+          child: Row(
+            children: [
+              const SizedBox(width: 2),
+              ...List.generate(7, (index) {
+                return SizedBox(
+                  width: 15,
+                  child: Text(
+                    weekLabels[index],
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Colors.grey[600],
                     ),
-                  );
-                }),
-              ],
-            ),
+                    textAlign: TextAlign.center,
+                  ),
+                );
+              }),
+            ],
           ),
+        ),
 
-          const SizedBox(height: 4),
+        const SizedBox(height: 4),
 
-          // 各月のヒートマップ
-          for (final month in monthList)
-            Row(
+        // カレンダーのスクロール可能な部分
+        Expanded(
+          child: SingleChildScrollView(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 月ラベル
-                SizedBox(
-                  width: 40,
-                  child: Text(
-                    monthLabels[month.month - 1],
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[700],
-                    ),
-                  ),
-                ),
+                // 各月のヒートマップ
+                for (final month in monthList)
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // 月ラベル
+                      SizedBox(
+                        width: 40,
+                        child: Text(
+                          monthLabels[month.month - 1],
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[700],
+                          ),
+                        ),
+                      ),
 
-                // 該当月のカレンダーグリッド
-                _buildMonthGrid(month, maxCount),
+                      // 該当月のカレンダーグリッド
+                      _buildMonthGrid(month, maxCount),
+                    ],
+                  ),
               ],
             ),
-        ],
-      ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -206,8 +216,8 @@ class HeatMapCalendar extends StatelessWidget {
 
     if (colorMode == ColorMode.OPACITY) {
       // 透明度モード（緑色の濃淡）
-      final opacity = count / maxCount;
-      return Colors.green.withOpacity(0.2 + opacity * 0.8);
+      final opacity = count / maxCount > 1 ? 1 : count / maxCount;
+      return Colors.purple.withValues(alpha: 0.2 + opacity * 0.8);
     } else {
       // カラーモード（青→緑→黄→赤）
       if (count <= maxCount * 0.25) {

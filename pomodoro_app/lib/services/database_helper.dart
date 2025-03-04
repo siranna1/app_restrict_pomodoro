@@ -514,9 +514,10 @@ class DatabaseHelper {
 
   // タスク効率分析データを取得
   Future<List<Map<String, dynamic>>> getTaskEfficiencyData() async {
-    final db = await database;
+    try {
+      final db = await database;
 
-    return await db.rawQuery('''
+      return await db.rawQuery('''
       SELECT 
         t.id,
         t.name,
@@ -534,6 +535,10 @@ class DatabaseHelper {
       HAVING completedPomodoros >= 3
       ORDER BY avgFocusScore DESC
     ''');
+    } catch (e) {
+      print('タスク効率データ取得エラー: $e');
+      return [];
+    }
   }
 
   // 曜日ごとの効率データを取得
@@ -783,19 +788,35 @@ class DatabaseHelper {
   // 統計関連のメソッド
   Future<List<Map<String, dynamic>>> getDailyStatistics() async {
     final db = await database;
-    final results = await db.rawQuery('''
+    final now = DateTime.now();
+
+    // 過去5日間のデータを準備（今日も含む）
+    final result = <Map<String, dynamic>>[];
+
+    for (int i = 4; i >= 0; i--) {
+      final date = DateTime(now.year, now.month, now.day - i);
+      final dateStr = date.toIso8601String().substring(0, 10);
+
+      // その日のデータをクエリ
+      final results = await db.rawQuery('''
       SELECT 
-        date(startTime) as date,
         COUNT(*) as count,
         SUM(durationMinutes) as totalMinutes
       FROM pomodoro_sessions
-      WHERE completed = 1
-      GROUP BY date(startTime)
-      ORDER BY date(startTime) DESC
-      LIMIT 7
-    ''');
+      WHERE date(startTime) = date(?)
+        AND completed = 1
+        AND isBreak = 0
+    ''', [dateStr]);
 
-    return results.reversed.toList();
+      // データを結果リストに追加（セッションがなければ0として追加）
+      result.add({
+        'date': dateStr,
+        'count': results.first['count'] as int? ?? 0,
+        'totalMinutes': results.first['totalMinutes'] as int? ?? 0
+      });
+    }
+
+    return result;
   }
 
   Future<List<Map<String, dynamic>>> getWeeklyStatistics() async {

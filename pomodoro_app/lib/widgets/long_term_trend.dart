@@ -92,9 +92,132 @@ class _LongTermTrendAnalysisState extends State<LongTermTrendAnalysis> {
             LineChartData(
               gridData: FlGridData(show: true),
               titlesData: FlTitlesData(
-                  // タイトル設定
-                  // ...
+                show: true,
+                bottomTitles: AxisTitles(
+                  sideTitles: SideTitles(
+                    showTitles: true,
+                    reservedSize: 30,
+                    getTitlesWidget: (double value, TitleMeta meta) {
+                      final index = value.toInt();
+                      if (index < 0 || index >= _trendData.length) {
+                        return const SizedBox.shrink();
+                      }
+
+                      // 現在のperiodを取得（例："2024-01"）
+                      final period = _trendData[index]['period'] as String;
+                      final parts = period.split('-');
+
+                      // 月次データの場合
+                      if (_selectedTimeFrame == 'monthly') {
+                        if (parts.length != 2) return const SizedBox.shrink();
+
+                        final year = parts[0];
+                        final month = parts[1];
+
+                        // 最初のデータポイントか月が変わるタイミングでのみ表示
+                        final isMonthChange = index == 0 ||
+                            (index > 0 &&
+                                month !=
+                                    _trendData[index - 1]['period']
+                                        .toString()
+                                        .split('-')[1]);
+
+                        if (!isMonthChange) {
+                          return const SizedBox.shrink(); // 月が変わらないときは何も表示しない
+                        }
+
+                        // 年が変わるタイミングでは年も表示
+                        final isYearChange = index == 0 ||
+                            (index > 0 &&
+                                year !=
+                                    _trendData[index - 1]['period']
+                                        .toString()
+                                        .split('-')[0]);
+
+                        // 表示テキスト（例："2024年1月" または "1月"）
+                        final displayText = isYearChange
+                            ? "$year年${int.parse(month)}月"
+                            : "${int.parse(month)}月";
+
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 5),
+                          child: Text(
+                            displayText,
+                            style: const TextStyle(fontSize: 10),
+                          ),
+                        );
+                      }
+                      // 四半期データの場合
+                      else if (_selectedTimeFrame == 'quarterly') {
+                        if (parts.length != 2) return const SizedBox.shrink();
+
+                        final year = parts[0];
+                        final quarter = parts[1];
+
+                        // 最初のデータポイントか四半期が変わるタイミングでのみ表示
+                        final isQuarterChange = index == 0 ||
+                            (index > 0 &&
+                                quarter !=
+                                    _trendData[index - 1]['period']
+                                        .toString()
+                                        .split('-')[1]);
+
+                        if (!isQuarterChange) {
+                          return const SizedBox.shrink(); // 四半期が変わらないときは何も表示しない
+                        }
+
+                        // 年が変わるタイミングでは年も表示
+                        final isYearChange = index == 0 ||
+                            (index > 0 &&
+                                year !=
+                                    _trendData[index - 1]['period']
+                                        .toString()
+                                        .split('-')[0]);
+
+                        final displayText =
+                            isYearChange ? "$year年Q$quarter" : "Q$quarter";
+
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 5),
+                          child: Text(
+                            displayText,
+                            style: const TextStyle(fontSize: 10),
+                          ),
+                        );
+                      }
+                      // 年次データの場合 - すべてのポイントで年を表示
+                      else {
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 5),
+                          child: Text(
+                            "${period}年",
+                            style: const TextStyle(fontSize: 10),
+                          ),
+                        );
+                      }
+                    },
                   ),
+                ),
+                leftTitles: AxisTitles(
+                  sideTitles: SideTitles(
+                    showTitles: true,
+                    reservedSize: 30,
+                    getTitlesWidget: (value, meta) {
+                      if (value == 0) {
+                        return const Text('0');
+                      }
+                      return Text(value.toInt().toString());
+                    },
+                  ),
+                ),
+                // 上部と右側のタイトルを非表示に
+                topTitles: AxisTitles(
+                  sideTitles: SideTitles(showTitles: false),
+                ),
+                rightTitles: AxisTitles(
+                  sideTitles: SideTitles(showTitles: false),
+                ),
+              ),
               borderData: FlBorderData(show: true),
               lineBarsData: [
                 // ポモドーロ数の折れ線

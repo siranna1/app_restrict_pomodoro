@@ -70,6 +70,7 @@ class DetailedAnalysisTab extends StatelessWidget {
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 8),
+            // 曜日別効率のデータ取得と表示を修正
             FutureBuilder<List<Map<String, dynamic>>>(
               future: DatabaseHelper.instance.getWeekdayEfficiencyData(),
               builder: (context, snapshot) {
@@ -79,12 +80,28 @@ class DetailedAnalysisTab extends StatelessWidget {
 
                 final weekdayData = snapshot.data ?? [];
 
-                if (weekdayData.isEmpty) {
-                  return const Center(child: Text('曜日別データがありません'));
-                }
-
-                // 曜日名の配列
+                // すべての曜日のデータを準備
                 final weekdayNames = ['日', '月', '火', '水', '木', '金', '土'];
+                final fullWeekdayData = List.generate(7, (index) {
+                  // 該当する曜日のデータを検索
+                  final existingData = weekdayData
+                      .where(
+                          (day) => int.parse(day['weekday'] as String) == index)
+                      .toList();
+
+                  // 既存データがあれば使用、なければ0のデータを作成
+                  if (existingData.isNotEmpty) {
+                    return existingData.first;
+                  } else {
+                    return {
+                      'weekday': '$index',
+                      'count': 0,
+                      'avgFocusScore': 0.0,
+                      'totalMinutes': 0,
+                      'avgInterruptions': 0.0,
+                    };
+                  }
+                });
 
                 return Card(
                   elevation: 2,
@@ -102,12 +119,10 @@ class DetailedAnalysisTab extends StatelessWidget {
                           height: 200,
                           child: ListView.builder(
                             scrollDirection: Axis.horizontal,
-                            itemCount: weekdayData.length,
+                            itemCount: fullWeekdayData.length,
                             itemBuilder: (context, index) {
-                              final day = weekdayData[index];
-                              final weekdayIndex =
-                                  int.parse(day['weekday'] as String);
-                              final weekdayName = weekdayNames[weekdayIndex];
+                              final day = fullWeekdayData[index];
+                              final weekdayName = weekdayNames[index];
                               final count = day['count'] as int;
                               final avgFocus =
                                   day['avgFocusScore'] as double? ?? 0.0;
@@ -128,7 +143,10 @@ class DetailedAnalysisTab extends StatelessWidget {
                                       child: Container(
                                         width: 60,
                                         decoration: BoxDecoration(
-                                          color: _getFocusColor(avgFocus),
+                                          // 集中度に基づいた色（セッションがない場合はグレー）
+                                          color: count > 0
+                                              ? _getFocusColor(avgFocus)
+                                              : Colors.grey[300],
                                           borderRadius:
                                               BorderRadius.circular(8),
                                         ),
@@ -146,7 +164,7 @@ class DetailedAnalysisTab extends StatelessWidget {
                                               ),
                                             ),
                                             const Text(
-                                              'ポモドーロ',
+                                              '回', // シンプルに「回」とする
                                               style: TextStyle(
                                                 color: Colors.white,
                                                 fontSize: 12,
@@ -158,7 +176,9 @@ class DetailedAnalysisTab extends StatelessWidget {
                                     ),
                                     const SizedBox(height: 8),
                                     Text(
-                                      '集中度: ${avgFocus.toStringAsFixed(1)}',
+                                      count > 0
+                                          ? '集中度: ${avgFocus.toStringAsFixed(1)}'
+                                          : 'データなし',
                                       style: const TextStyle(fontSize: 12),
                                     ),
                                   ],

@@ -21,74 +21,6 @@ class _TrendAnalysisTabState extends State<TrendAnalysisTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 長期トレンド分析
-            Text(
-              '長期トレンド',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 8),
-            const LongTermTrendAnalysis(),
-
-            const SizedBox(height: 20),
-
-            // カレンダーヒートマップ
-            Text(
-              'ポモドーロカレンダー',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 8),
-            FutureBuilder<List<PomodoroSession>>(
-              future: DatabaseHelper.instance.getPomodoroSessions(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                final sessions = snapshot.data ?? [];
-                final now = DateTime.now();
-                final sixMonthsAgo = DateTime(now.year, now.month - 5, 1);
-
-                // 日付ごとのセッション数をマッピング
-                final Map<DateTime, int> dailyCounts = {};
-                for (final session in sessions) {
-                  final date = DateTime(
-                    session.startTime.year,
-                    session.startTime.month,
-                    session.startTime.day,
-                  );
-
-                  dailyCounts[date] = (dailyCounts[date] ?? 0) + 1;
-                }
-
-                return SizedBox(
-                  height: 300,
-                  child: HeatMapCalendar(
-                    startDate: sixMonthsAgo,
-                    endDate: now,
-                    dailyCounts: dailyCounts,
-                    colorMode: ColorMode.COLOR,
-                    monthLabels: const [
-                      '1月',
-                      '2月',
-                      '3月',
-                      '4月',
-                      '5月',
-                      '6月',
-                      '7月',
-                      '8月',
-                      '9月',
-                      '10月',
-                      '11月',
-                      '12月'
-                    ],
-                    weekLabels: const ['月', '火', '水', '木', '金', '土', '日'],
-                  ),
-                );
-              },
-            ),
-
-            const SizedBox(height: 20),
-
             // 習慣形成分析
             FutureBuilder<Map<String, dynamic>>(
               future: DatabaseHelper.instance.getHabitFormationStats(),
@@ -161,6 +93,73 @@ class _TrendAnalysisTabState extends State<TrendAnalysisTab> {
                         ),
                       ],
                     ),
+                  ),
+                );
+              },
+            ),
+
+            const SizedBox(height: 20),
+            // 長期トレンド分析
+            Text(
+              '長期トレンド',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            const LongTermTrendAnalysis(),
+
+            const SizedBox(height: 20),
+
+            // カレンダーヒートマップ
+            Text(
+              'ポモドーロカレンダー',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            FutureBuilder<List<PomodoroSession>>(
+              future: DatabaseHelper.instance.getPomodoroSessions(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                final sessions = snapshot.data ?? [];
+                final now = DateTime.now();
+                final sixMonthsAgo = DateTime(now.year, now.month - 5, 1);
+
+                // 日付ごとのセッション数をマッピング
+                final Map<DateTime, int> dailyCounts = {};
+                for (final session in sessions) {
+                  final date = DateTime(
+                    session.startTime.year,
+                    session.startTime.month,
+                    session.startTime.day,
+                  );
+
+                  dailyCounts[date] = (dailyCounts[date] ?? 0) + 1;
+                }
+
+                return SizedBox(
+                  height: 300,
+                  child: HeatMapCalendar(
+                    startDate: sixMonthsAgo,
+                    endDate: now,
+                    dailyCounts: dailyCounts,
+                    colorMode: ColorMode.OPACITY,
+                    monthLabels: const [
+                      '1月',
+                      '2月',
+                      '3月',
+                      '4月',
+                      '5月',
+                      '6月',
+                      '7月',
+                      '8月',
+                      '9月',
+                      '10月',
+                      '11月',
+                      '12月'
+                    ],
+                    weekLabels: const ['月', '火', '水', '木', '金', '土', '日'],
                   ),
                 );
               },

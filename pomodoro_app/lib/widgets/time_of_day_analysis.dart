@@ -30,6 +30,21 @@ class _TimeOfDayAnalysisState extends State<TimeOfDayAnalysis> {
     try {
       final stats = await DatabaseHelper.instance
           .getTimeOfDayStatisticsForUI(widget.days);
+      // 時間帯の表示順を定義
+      final timeOrder = {
+        'morning': 0, // 早朝 (5-8時)
+        'forenoon': 1, // 午前 (8-12時)
+        'afternoon': 2, // 午後 (12-17時)
+        'evening': 3, // 夕方 (17-20時)
+        'night': 4, // 夜間 (20-24時)
+        'midnight': 5, // 深夜 (0-5時)
+      };
+      // 時間順にソート
+      stats.sort((a, b) {
+        return (timeOrder[a['timeOfDay']] ?? 999)
+            .compareTo(timeOrder[b['timeOfDay']] ?? 999);
+      });
+
       setState(() {
         _timeOfDayStats = stats;
         _isLoading = false;
@@ -100,9 +115,35 @@ class _TimeOfDayAnalysisState extends State<TimeOfDayAnalysis> {
                 ),
               ),
               titlesData: FlTitlesData(
-                  // グラフタイトル設定
-                  // ...省略...
+                show: true,
+                bottomTitles: AxisTitles(
+                  sideTitles: SideTitles(
+                    showTitles: true,
+                    getTitlesWidget: (value, meta) {
+                      final index = value.toInt();
+                      if (index >= 0 && index < _timeOfDayStats.length) {
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 8.0),
+                          child: Text(
+                            _timeOfDayStats[index]['label'] as String,
+                            style: const TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        );
+                      }
+                      return const Text('');
+                    },
+                    reservedSize: 40,
                   ),
+                ),
+                topTitles:
+                    AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                rightTitles:
+                    AxisTitles(sideTitles: SideTitles(showTitles: false)),
+              ),
               borderData: FlBorderData(show: false),
               barGroups: _getBarGroups(),
             ),

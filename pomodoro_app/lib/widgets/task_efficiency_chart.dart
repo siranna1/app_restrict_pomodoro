@@ -38,6 +38,7 @@ class _TaskEfficiencyChartState extends State<TaskEfficiencyChart> {
     } catch (e) {
       print('タスク効率データ読み込みエラー: $e');
       setState(() {
+        _taskData = [];
         _isLoading = false;
       });
     }
