@@ -1,4 +1,5 @@
-// services/ticktick_service.dart - TickTick API連携サービス
+// ticktick_service.dart の修正
+
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -19,15 +20,12 @@ class TickTickService {
   String? _refreshToken;
   DateTime? _tokenExpiry;
 
-  // APIキー情報（本来は環境変数などで管理）
-  // 注: 実際のアプリ開発では、クライアントIDとシークレットは安全に管理してください
-// APIキー情報を環境変数や設定から読み込む
-  //static String get _clientId =>
-  //    const String.fromEnvironment('TICKTICK_CLIENT_ID', defaultValue: '');
+  // プロジェクト情報のキャッシュ
+  Map<String, String> _projectIdToNameMap = {};
+
+  // APIキー情報を環境変数や設定から読み込む
   static String _clientId = "qd8SNKwQ9Z7eY6rBg6";
-  //static String get _clientSecret =>
-  //    const String.fromEnvironment('TICKTICK_CLIENT_SECRET', defaultValue: '');
-  static String _clientSecret = "ugZ9Rh*tiitPi9YZk_g++X@K&s769(86";
+  static String _clientSecret = "ugZ9Rh*tiitPi9YZk_g++X@K&s769(86)";
 
   // 初期化
   Future<void> initialize() async {
@@ -80,6 +78,7 @@ class TickTickService {
   // OAuth2認証フロー（認証コードフロー）
   Future<bool> authenticate(String authCode) async {
     try {
+      print('TickTick認証開始: コード=$authCode');
       final response = await http.post(
         Uri.parse(_authUrl),
         headers: {
@@ -95,6 +94,9 @@ class TickTickService {
         },
       );
 
+      print('認証レスポンス: ${response.statusCode}');
+      print('レスポンス本文: ${response.body}');
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         _accessToken = data['access_token'];
@@ -105,9 +107,11 @@ class TickTickService {
         _tokenExpiry = DateTime.now().add(Duration(seconds: expiresIn));
 
         await _saveTokens();
+        print('認証成功: トークン=${_accessToken?.substring(0, 10)}...');
         return true;
       }
 
+      print('認証失敗: ステータスコード=${response.statusCode}');
       return false;
     } catch (e) {
       print('TickTick認証エラー: $e');
@@ -118,10 +122,12 @@ class TickTickService {
   // アクセストークンをリフレッシュ
   Future<bool> _refreshAccessToken() async {
     if (_refreshToken == null) {
+      print('リフレッシュトークンがありません');
       return false;
     }
 
     try {
+      print('アクセストークンをリフレッシュ中...');
       final response = await http.post(
         Uri.parse(_authUrl),
         headers: {
@@ -145,9 +151,11 @@ class TickTickService {
         _tokenExpiry = DateTime.now().add(Duration(seconds: expiresIn));
 
         await _saveTokens();
+        print('トークンリフレッシュ成功');
         return true;
       }
 
+      print('トークンリフレッシュ失敗: ${response.statusCode}');
       return false;
     } catch (e) {
       print('TickTickトークンリフレッシュエラー: $e');
@@ -159,9 +167,10 @@ class TickTickService {
   Future<http.Response?> _apiRequest(String method, String endpoint,
       {Map<String, dynamic>? body}) async {
     if (!isAuthenticated) {
+      print('認証が必要です');
       final refreshed = await _refreshAccessToken();
       if (!refreshed) {
-        print('認証されていないため、API呼び出しを中止します');
+        print('トークンのリフレッシュに失敗しました');
         return null;
       }
     }
@@ -172,9 +181,8 @@ class TickTickService {
       'Authorization': 'Bearer $_accessToken',
     };
 
-    print('API呼び出し: $method $url');
-    print('ヘッダー: $headers');
-    if (body != null) print('リクエストボディ: $body');
+    print('APIリクエスト: $method $url');
+
     http.Response response;
 
     try {
@@ -203,8 +211,11 @@ class TickTickService {
           throw Exception('Unsupported HTTP method: $method');
       }
 
+      print('APIレスポンス: ${response.statusCode}');
+
       // トークンの有効期限切れの場合は再認証
       if (response.statusCode == 401) {
+        print('認証エラー (401) - トークンをリフレッシュします');
         final refreshed = await _refreshAccessToken();
         if (refreshed) {
           return _apiRequest(method, endpoint, body: body);
@@ -220,19 +231,32 @@ class TickTickService {
   }
 
   // タスクリストを取得
-  Future<List<Task>?> fetchTasks() async {
+  Future<List<Task>> fetchTasks() async {
     try {
-      // まずプロジェクト一覧を取得
+      // プロジェクト一覧を取得
+      print('TickTickプロジェクト一覧を取得中...');
       final projectsResponse = await _apiRequest('GET', '/project');
 
       if (projectsResponse == null || projectsResponse.statusCode != 200) {
-        print(
-            'TickTick プロジェクト取得エラー: ${projectsResponse?.statusCode} ${projectsResponse?.body}');
-        return null;
+        print('TickTick プロジェクト取得エラー: ${projectsResponse?.statusCode}');
+        if (projectsResponse != null) {
+          print('レスポンス本文: ${projectsResponse.body}');
+        }
+        return [];
       }
 
       final projectsData = jsonDecode(projectsResponse.body);
-      print('TickTick プロジェクトデータ: $projectsData'); // デバッグ用
+      print('TickTick プロジェクト数: ${projectsData.length}');
+
+      // プロジェクト情報をキャッシュ
+      _projectIdToNameMap.clear();
+      if (projectsData is List) {
+        for (var project in projectsData) {
+          final projectId = project['id'];
+          final projectName = project['name'];
+          _projectIdToNameMap[projectId] = projectName;
+        }
+      }
 
       List<Task> allTasks = [];
 
@@ -262,13 +286,18 @@ class TickTickService {
                 final status = taskData['status'] as int? ?? 0;
                 if (status != 2) {
                   // 2は完了済みタスク
-                  allTasks.add(_mapTickTickTaskToTask(taskData));
+                  // プロジェクト名とIDを使用してタスクを作成
+                  allTasks.add(
+                      _mapTickTickTaskToTask(taskData, projectName, projectId));
                 }
               }
             }
           } else {
             print(
                 'プロジェクト「$projectName」のデータ取得エラー: ${projectDataResponse?.statusCode}');
+            if (projectDataResponse != null) {
+              print('レスポンス本文: ${projectDataResponse.body}');
+            }
           }
         }
       }
@@ -277,16 +306,20 @@ class TickTickService {
       return allTasks;
     } catch (e) {
       print('TickTick タスク取得エラー: $e');
-      return null;
+      return [];
     }
   }
 
   // TickTickのタスクをアプリのタスクモデルに変換
-  Task _mapTickTickTaskToTask(Map<String, dynamic> tickTickTask) {
+  Task _mapTickTickTaskToTask(
+      Map<String, dynamic> tickTickTask, String projectName, String projectId) {
     // タスクのタイトルと説明を取得
     final title = tickTickTask['title'] ?? '';
     final description = tickTickTask['content'] ?? '';
-    final category = _getCategoryFromProject(tickTickTask['projectId']);
+    final tickTickTaskId = tickTickTask['id'] as String?;
+
+    // カテゴリとしてプロジェクト名を使用
+    final category = projectName;
 
     // ポモドーロ数の見積もり（優先度から判断など）
     final priority = tickTickTask['priority'] as int? ?? 0;
@@ -306,101 +339,152 @@ class TickTickService {
       description: description,
       estimatedPomodoros: estimatedPomodoros,
       completedPomodoros: 0, // 初期値
-      tickTickId: tickTickTask['id'],
+      tickTickId: tickTickTaskId,
     );
-  }
-
-  // プロジェクトIDからカテゴリ名を取得するヘルパーメソッド
-  String _getCategoryFromProject(String? projectId) {
-    if (projectId == null) return 'その他';
-
-    // キャッシュしたプロジェクト情報から名前を取得
-    // この部分は実装によって異なるため、簡易的な実装を示します
-    return 'TickTick'; // デフォルト値
-  }
-
-  // タグからカテゴリを抽出（例: 最初のタグをカテゴリとして使用）
-  String _extractCategoryFromTags(List<dynamic>? tags) {
-    if (tags == null || tags.isEmpty) {
-      return 'その他';
-    }
-    return tags[0].toString();
-  }
-
-  // タスクから予定ポモドーロ数を抽出（例: タイトルから「[P3]」のような形式で抽出）
-  int _extractEstimatedPomodorosFromTask(Map<String, dynamic> task) {
-    final title = task['title'] ?? '';
-    final match = RegExp(r'\[P(\d+)\]').firstMatch(title);
-
-    if (match != null && match.groupCount >= 1) {
-      return int.tryParse(match.group(1) ?? '0') ?? 0;
-    }
-
-    // デフォルト値
-    return 1;
-  }
-
-  // ポモドーロセッション完了をTickTickに記録
-  Future<bool> recordPomodoroSession(Task task, int durationMinutes) async {
-    if (task.tickTickId == null) {
-      return false;
-    }
-
-    try {
-      // TickTickのタスク詳細を取得
-      final taskResponse = await _apiRequest(
-        'GET',
-        '/task/${task.tickTickId}',
-      );
-
-      if (taskResponse == null || taskResponse.statusCode != 200) {
-        return false;
-      }
-
-      final taskData = jsonDecode(taskResponse.body);
-
-      // ポモドーロ記録を追加
-      final pomodoros = taskData['pomodoros'] ?? [];
-      pomodoros.add({
-        'duration': durationMinutes,
-        'startTime': DateTime.now().toIso8601String(),
-      });
-
-      // タスクを更新
-      final updateResponse = await _apiRequest(
-        'PUT',
-        '/task/${task.tickTickId}',
-        body: {
-          ...taskData,
-          'pomodoros': pomodoros,
-        },
-      );
-
-      return updateResponse != null && updateResponse.statusCode == 200;
-    } catch (e) {
-      print('TickTick ポモドーロ記録エラー: $e');
-      return false;
-    }
   }
 
   // タスク完了をTickTickに報告
   Future<bool> completeTask(String tickTickId) async {
-    try {
-      final response = await _apiRequest(
-        'POST',
-        '/task/$tickTickId/complete',
-      );
+    if (!isAuthenticated) {
+      print('認証されていないため、タスク完了を記録できません');
+      return false;
+    }
 
-      return response != null && response.statusCode == 200;
+    try {
+      // プロジェクト一覧を取得
+      final projectsResponse = await _apiRequest('GET', '/project');
+      if (projectsResponse == null || projectsResponse.statusCode != 200) {
+        print('プロジェクト取得エラー: タスク完了を記録できません');
+        return false;
+      }
+
+      final projectsData = jsonDecode(projectsResponse.body);
+
+      // 各プロジェクトを調べてタスクを検索
+      if (projectsData is List) {
+        for (var project in projectsData) {
+          final projectId = project['id'];
+
+          // プロジェクト内のタスクを取得
+          final projectDataResponse =
+              await _apiRequest('GET', '/project/$projectId/data');
+
+          if (projectDataResponse != null &&
+              projectDataResponse.statusCode == 200) {
+            final projectData = jsonDecode(projectDataResponse.body);
+
+            if (projectData.containsKey('tasks') &&
+                projectData['tasks'] is List) {
+              final tasksList = projectData['tasks'] as List;
+
+              // タスクIDが一致するタスクを探す
+              for (var taskData in tasksList) {
+                if (taskData['id'] == tickTickId) {
+                  // タスクを完了としてマーク
+                  print('タスク $tickTickId を完了としてマーク...');
+                  final response = await _apiRequest(
+                    'POST',
+                    '/project/$projectId/task/$tickTickId/complete',
+                  );
+
+                  if (response != null && response.statusCode == 200) {
+                    print('タスク完了が正常に記録されました');
+                    return true;
+                  } else {
+                    print('タスク完了の記録に失敗: ${response?.statusCode}');
+                    return false;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      print('指定されたID $tickTickId のタスクが見つかりませんでした');
+      return false;
     } catch (e) {
       print('TickTick タスク完了エラー: $e');
       return false;
     }
   }
 
+// プロジェクト一覧を取得
+  Future<List<Map<String, dynamic>>> getProjects() async {
+    try {
+      print('TickTickプロジェクト一覧を取得中...');
+      final projectsResponse = await _apiRequest('GET', '/project');
+
+      if (projectsResponse == null || projectsResponse.statusCode != 200) {
+        print('TickTick プロジェクト取得エラー: ${projectsResponse?.statusCode}');
+        return [];
+      }
+
+      final projectsData = jsonDecode(projectsResponse.body);
+
+      // プロジェクト情報をキャッシュ
+      _projectIdToNameMap.clear();
+      if (projectsData is List) {
+        for (var project in projectsData) {
+          final projectId = project['id'];
+          final projectName = project['name'];
+          _projectIdToNameMap[projectId] = projectName;
+        }
+
+        return List<Map<String, dynamic>>.from(projectsData);
+      }
+
+      return [];
+    } catch (e) {
+      print('TickTick プロジェクト取得エラー: $e');
+      return [];
+    }
+  }
+
+// 特定のプロジェクトからタスクを取得
+  Future<List<Task>> fetchTasksFromProject(
+      String projectId, String projectName) async {
+    try {
+      print('プロジェクト「$projectName」のタスクを取得中...');
+
+      // プロジェクトごとのデータを取得（タスクを含む）
+      final projectDataResponse =
+          await _apiRequest('GET', '/project/$projectId/data');
+
+      if (projectDataResponse == null ||
+          projectDataResponse.statusCode != 200) {
+        print(
+            'プロジェクト「$projectName」のデータ取得エラー: ${projectDataResponse?.statusCode}');
+        return [];
+      }
+
+      final projectData = jsonDecode(projectDataResponse.body);
+      List<Task> tasks = [];
+
+      if (projectData.containsKey('tasks') && projectData['tasks'] is List) {
+        final tasksList = projectData['tasks'] as List;
+        print('プロジェクト「$projectName」のタスク数: ${tasksList.length}');
+
+        for (var taskData in tasksList) {
+          // ステータスを確認（完了していないタスクのみ取得）
+          final status = taskData['status'] as int? ?? 0;
+          if (status != 2) {
+            // 2は完了済みタスク
+            // プロジェクト名とIDを使用してタスクを作成
+            tasks.add(_mapTickTickTaskToTask(taskData, projectName, projectId));
+          }
+        }
+      }
+
+      return tasks;
+    } catch (e) {
+      print('TickTick プロジェクトタスク取得エラー: $e');
+      return [];
+    }
+  }
+
   // TickTickからタスクをインポート
   Future<List<Task>> importTasksFromTickTick() async {
-    final tasks = await fetchTasks();
-    return tasks ?? [];
+    return await fetchTasks();
   }
 }

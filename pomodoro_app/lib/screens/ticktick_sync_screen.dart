@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../providers/ticktick_provider.dart';
 import '../providers/task_provider.dart';
+import '../widgets/project_selection_dialog.dart';
 
 class TickTickSyncScreen extends StatefulWidget {
   const TickTickSyncScreen({Key? key}) : super(key: key);
@@ -193,37 +194,39 @@ class _TickTickSyncScreenState extends State<TickTickSyncScreen> {
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 16),
+              // TickTickからタスクをインポートするボタンの処理を修正
               ElevatedButton.icon(
                 icon: const Icon(Icons.download),
                 label: Text(_isImporting ? 'インポート中...' : 'タスクをインポート'),
-                onPressed: _isImporting ? null : _importTasks,
+                onPressed:
+                    _isImporting ? null : _showProjectSelectionDialog, // ここを変更
               ),
               if (_importedTaskCount > 0) ...[
                 const SizedBox(height: 8),
                 Text('$_importedTaskCount 件のタスクをインポートしました'),
               ],
               const SizedBox(height: 24),
-              Text(
-                '同期設定',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 16),
-              SwitchListTile(
-                title: const Text('ポモドーロ完了時に自動同期'),
-                subtitle: const Text('ポモドーロセッションの完了をTickTickに記録します'),
-                value: true, // 設定値として保存・取得する実装が必要
-                onChanged: (value) {
-                  // 設定を保存する実装
-                },
-              ),
-              SwitchListTile(
-                title: const Text('タスク完了時に自動同期'),
-                subtitle: const Text('タスクの完了状態をTickTickと同期します'),
-                value: true, // 設定値として保存・取得する実装が必要
-                onChanged: (value) {
-                  // 設定を保存する実装
-                },
-              ),
+              // Text(
+              //   '同期設定',
+              //   style: Theme.of(context).textTheme.titleLarge,
+              // ),
+              // const SizedBox(height: 16),
+              // SwitchListTile(
+              //   title: const Text('ポモドーロ完了時に自動同期'),
+              //   subtitle: const Text('ポモドーロセッションの完了をTickTickに記録します'),
+              //   value: true, // 設定値として保存・取得する実装が必要
+              //   onChanged: (value) {
+              //     // 設定を保存する実装
+              //   },
+              // ),
+              // SwitchListTile(
+              //   title: const Text('タスク完了時に自動同期'),
+              //   subtitle: const Text('タスクの完了状態をTickTickと同期します'),
+              //   value: true, // 設定値として保存・取得する実装が必要
+              //   onChanged: (value) {
+              //     // 設定を保存する実装
+              //   },
+              // ),
               const SizedBox(height: 24),
               OutlinedButton.icon(
                 icon: const Icon(Icons.logout),
@@ -265,6 +268,63 @@ class _TickTickSyncScreenState extends State<TickTickSyncScreen> {
         ),
       ),
     );
+  }
+
+  // ticktick_sync_screen.dart に追加
+
+// プロジェクト選択ダイアログを表示
+  Future<void> _showProjectSelectionDialog() async {
+    // TickTickからプロジェクト一覧を取得
+    final tickTickProvider =
+        Provider.of<TickTickProvider>(context, listen: false);
+    final projects = await tickTickProvider.getProjects();
+
+    if (projects.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('プロジェクトが見つかりません')),
+      );
+      return;
+    }
+
+    // ダイアログを表示
+    final selectedProject = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => ProjectSelectionDialog(projects: projects),
+    );
+
+    // プロジェクトが選択されたら、そのプロジェクトからタスクをインポート
+    if (selectedProject != null) {
+      setState(() {
+        _isImporting = true;
+      });
+
+      try {
+        final importedTasks = await tickTickProvider.importTasksFromProject(
+          selectedProject['id'],
+          selectedProject['name'],
+        );
+
+        _importedTaskCount = importedTasks.length;
+
+        // タスクリストを更新
+        final taskProvider = Provider.of<TaskProvider>(context, listen: false);
+        await taskProvider.loadTasks();
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text(
+                  '${selectedProject['name']}から$_importedTaskCount件のタスクをインポートしました')),
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('タスクのインポート中にエラーが発生しました: $e')),
+        );
+      } finally {
+        setState(() {
+          _isImporting = false;
+        });
+      }
+    }
   }
 
   // 日時のフォーマット
