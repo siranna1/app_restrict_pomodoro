@@ -12,7 +12,7 @@ class TasksScreen extends StatefulWidget {
 }
 
 class _TasksScreenState extends State<TasksScreen> {
-  String _filter = 'all';
+  String _selectedCategory = 'すべて';
   String _searchQuery = '';
   final _searchController = TextEditingController();
 
@@ -25,6 +25,12 @@ class _TasksScreenState extends State<TasksScreen> {
   @override
   Widget build(BuildContext context) {
     final taskProvider = Provider.of<TaskProvider>(context);
+
+// 利用可能なカテゴリリストを作成
+    final categories = [
+      'すべて',
+      ...taskProvider.tasks.map((t) => t.category).toSet().toList()
+    ];
 
     // タスクをフィルタリング
     final filteredTasks = _filterTasks(taskProvider.tasks);
@@ -53,41 +59,22 @@ class _TasksScreenState extends State<TasksScreen> {
             child: Row(
               children: [
                 const SizedBox(width: 8),
-                FilterChip(
-                  label: const Text('すべて'),
-                  selected: _filter == 'all',
-                  onSelected: (selected) {
-                    if (selected) {
-                      setState(() {
-                        _filter = 'all';
-                      });
-                    }
-                  },
-                ),
-                const SizedBox(width: 8),
-                FilterChip(
-                  label: const Text('進行中'),
-                  selected: _filter == 'in_progress',
-                  onSelected: (selected) {
-                    if (selected) {
-                      setState(() {
-                        _filter = 'in_progress';
-                      });
-                    }
-                  },
-                ),
-                const SizedBox(width: 8),
-                FilterChip(
-                  label: const Text('完了'),
-                  selected: _filter == 'completed',
-                  onSelected: (selected) {
-                    if (selected) {
-                      setState(() {
-                        _filter = 'completed';
-                      });
-                    }
-                  },
-                ),
+                ...categories.map((category) {
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8.0),
+                    child: FilterChip(
+                      label: Text(category),
+                      selected: _selectedCategory == category,
+                      onSelected: (selected) {
+                        if (selected) {
+                          setState(() {
+                            _selectedCategory = category;
+                          });
+                        }
+                      },
+                    ),
+                  );
+                }).toList(),
               ],
             ),
           ),
@@ -256,21 +243,34 @@ class _TasksScreenState extends State<TasksScreen> {
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    Expanded(
-                      child: LinearProgressIndicator(
-                        value: progress.clamp(0.0, 1.0),
-                        minHeight: 6,
-                        backgroundColor: Colors.grey[300],
+                    if (task.estimatedPomodoros > 0)
+                      Expanded(
+                        child: LinearProgressIndicator(
+                          value: progress.clamp(0.0, 1.0),
+                          minHeight: 6,
+                          backgroundColor: Colors.grey[300],
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '${task.completedPomodoros}/${task.estimatedPomodoros}',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
+                    if (task.estimatedPomodoros > 0) const SizedBox(width: 8),
+                    if (task.estimatedPomodoros > 0)
+                      Text(
+                        '${task.completedPomodoros}/${task.estimatedPomodoros}',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 16),
+                    if (task.estimatedPomodoros == 0)
+                      const Icon(Icons.check_circle_outline,
+                          size: 16, color: Colors.grey),
+                    if (task.estimatedPomodoros == 0)
+                      Text(
+                        '${task.completedPomodoros} ポモドーロ',
+                        style: TextStyle(
+                          color: Colors.grey[700],
+                          fontSize: 14,
+                        ),
+                      ),
+                    if (task.estimatedPomodoros == 0) Spacer(),
                     IconButton(
                       icon: const Icon(Icons.edit),
                       onPressed: () => _showEditTaskDialog(context, task),
@@ -289,21 +289,11 @@ class _TasksScreenState extends State<TasksScreen> {
   List<Task> _filterTasks(List<Task> tasks) {
     // フィルター適用
     List<Task> result = [];
-
-    switch (_filter) {
-      case 'all':
-        result = List.from(tasks);
-        break;
-      case 'in_progress':
-        result = tasks
-            .where((task) => task.completedPomodoros < task.estimatedPomodoros)
-            .toList();
-        break;
-      case 'completed':
-        result = tasks
-            .where((task) => task.completedPomodoros >= task.estimatedPomodoros)
-            .toList();
-        break;
+    if (_selectedCategory == 'すべて') {
+      result = List.from(tasks);
+    } else {
+      result =
+          tasks.where((task) => task.category == _selectedCategory).toList();
     }
 
     // 検索クエリ適用
@@ -395,7 +385,7 @@ class _TasksScreenState extends State<TasksScreen> {
                         IconButton(
                           icon: const Icon(Icons.remove),
                           onPressed: () {
-                            if (estimatedPomodoros > 1) {
+                            if (estimatedPomodoros > 0) {
                               setState(() {
                                 // StatefulBuilder の setState を使用
                                 estimatedPomodoros--;
@@ -530,7 +520,7 @@ class _TasksScreenState extends State<TasksScreen> {
                           IconButton(
                             icon: const Icon(Icons.remove),
                             onPressed: () {
-                              if (estimatedPomodoros > 1) {
+                              if (estimatedPomodoros > 0) {
                                 setState(() {
                                   estimatedPomodoros--;
                                 });

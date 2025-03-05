@@ -321,17 +321,7 @@ class TickTickService {
     // カテゴリとしてプロジェクト名を使用
     final category = projectName;
 
-    // ポモドーロ数の見積もり（優先度から判断など）
-    final priority = tickTickTask['priority'] as int? ?? 0;
-    int estimatedPomodoros = 1; // デフォルト
-
-    // 優先度に基づいてポモドーロ数を推定
-    // 0:なし、1:低、3:中、5:高
-    if (priority == 5) {
-      estimatedPomodoros = 4; // 高優先度
-    } else if (priority == 3) {
-      estimatedPomodoros = 2; // 中優先度
-    }
+    const estimatedPomodoros = 0;
 
     return Task(
       name: title,

@@ -135,25 +135,43 @@ class _TaskSelectionState extends State<TaskSelection> {
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ],
+
                             const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: LinearProgressIndicator(
-                                    value: progress.clamp(0.0, 1.0),
-                                    minHeight: 6,
-                                    backgroundColor: Colors.grey[300],
+                            // 予定ポモドーロ数が設定されている場合のみプログレスバーを表示
+                            if (task.estimatedPomodoros > 0)
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: LinearProgressIndicator(
+                                      value: progress.clamp(0.0, 1.0),
+                                      minHeight: 6,
+                                      backgroundColor: Colors.grey[300],
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  '${task.completedPomodoros}/${task.estimatedPomodoros}',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    '${task.completedPomodoros}/${task.estimatedPomodoros}',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
-                                ),
-                              ],
-                            ),
+                                ],
+                              ),
+                            if (task.estimatedPomodoros == 0)
+                              Row(
+                                children: [
+                                  const Icon(Icons.timer,
+                                      size: 16, color: Colors.grey),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${task.completedPomodoros} ポモドーロ完了',
+                                    style: TextStyle(
+                                      color: Colors.grey[700],
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                ],
+                              ),
                           ],
                         ),
                       ),
