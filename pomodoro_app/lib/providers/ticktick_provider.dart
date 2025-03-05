@@ -37,6 +37,7 @@ class TickTickProvider with ChangeNotifier {
   // TickTickからタスクをインポート
   Future<List<Task>> importTasks() async {
     if (!isAuthenticated) {
+      print('TickTickに認証されていないため、インポート中止');
       return [];
     }
 
@@ -44,8 +45,14 @@ class TickTickProvider with ChangeNotifier {
     notifyListeners();
 
     try {
+      print('TickTickからタスクをインポート開始');
       final tasks = await _tickTickService.importTasksFromTickTick();
+      print('TickTickからインポートされたタスク数: ${tasks.length}');
 
+      // データが0件の場合の追加チェック
+      if (tasks.isEmpty) {
+        print('インポートされたタスクがありません。認証状態とAPI呼び出しを確認してください');
+      }
       // データベースに保存
       final db = DatabaseHelper.instance;
       for (final task in tasks) {

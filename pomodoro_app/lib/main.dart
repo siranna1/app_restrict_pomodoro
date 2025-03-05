@@ -116,7 +116,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    DatabaseHelper.instance.debugPrintDatabaseContent();
+    //DatabaseHelper.instance.debugPrintDatabaseContent();
     // URL起動処理を設定
     _handleIncomingLinks();
   }

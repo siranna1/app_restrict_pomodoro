@@ -11,7 +11,7 @@ class TickTickService {
   TickTickService._internal();
 
   // TickTick API エンドポイント
-  static const String _baseUrl = 'https://api.ticktick.com/api/v2';
+  static const String _baseUrl = 'https://api.ticktick.com/open/v1';
   static const String _authUrl = 'https://ticktick.com/oauth/token';
 
   // アクセストークン
@@ -161,6 +161,7 @@ class TickTickService {
     if (!isAuthenticated) {
       final refreshed = await _refreshAccessToken();
       if (!refreshed) {
+        print('認証されていないため、API呼び出しを中止します');
         return null;
       }
     }
@@ -171,6 +172,9 @@ class TickTickService {
       'Authorization': 'Bearer $_accessToken',
     };
 
+    print('API呼び出し: $method $url');
+    print('ヘッダー: $headers');
+    if (body != null) print('リクエストボディ: $body');
     http.Response response;
 
     try {
@@ -218,19 +222,59 @@ class TickTickService {
   // タスクリストを取得
   Future<List<Task>?> fetchTasks() async {
     try {
-      final response = await _apiRequest('GET', '/task');
+      // まずプロジェクト一覧を取得
+      final projectsResponse = await _apiRequest('GET', '/project');
 
-      if (response == null || response.statusCode != 200) {
+      if (projectsResponse == null || projectsResponse.statusCode != 200) {
+        print(
+            'TickTick プロジェクト取得エラー: ${projectsResponse?.statusCode} ${projectsResponse?.body}');
         return null;
       }
 
-      final data = jsonDecode(response.body);
+      final projectsData = jsonDecode(projectsResponse.body);
+      print('TickTick プロジェクトデータ: $projectsData'); // デバッグ用
 
-      if (data is List) {
-        return data.map((item) => _mapTickTickTaskToTask(item)).toList();
+      List<Task> allTasks = [];
+
+      // 各プロジェクトからタスクを取得
+      if (projectsData is List) {
+        for (var project in projectsData) {
+          final projectId = project['id'];
+          final projectName = project['name'];
+
+          print('プロジェクト「$projectName」のタスクを取得中...');
+
+          // プロジェクトごとのデータを取得（タスクを含む）
+          final projectDataResponse =
+              await _apiRequest('GET', '/project/$projectId/data');
+
+          if (projectDataResponse != null &&
+              projectDataResponse.statusCode == 200) {
+            final projectData = jsonDecode(projectDataResponse.body);
+
+            if (projectData.containsKey('tasks') &&
+                projectData['tasks'] is List) {
+              final tasksList = projectData['tasks'] as List;
+              print('プロジェクト「$projectName」のタスク数: ${tasksList.length}');
+
+              for (var taskData in tasksList) {
+                // ステータスを確認（完了していないタスクのみ取得）
+                final status = taskData['status'] as int? ?? 0;
+                if (status != 2) {
+                  // 2は完了済みタスク
+                  allTasks.add(_mapTickTickTaskToTask(taskData));
+                }
+              }
+            }
+          } else {
+            print(
+                'プロジェクト「$projectName」のデータ取得エラー: ${projectDataResponse?.statusCode}');
+          }
+        }
       }
 
-      return [];
+      print('取得したタスク総数: ${allTasks.length}');
+      return allTasks;
     } catch (e) {
       print('TickTick タスク取得エラー: $e');
       return null;
@@ -239,14 +283,40 @@ class TickTickService {
 
   // TickTickのタスクをアプリのタスクモデルに変換
   Task _mapTickTickTaskToTask(Map<String, dynamic> tickTickTask) {
+    // タスクのタイトルと説明を取得
+    final title = tickTickTask['title'] ?? '';
+    final description = tickTickTask['content'] ?? '';
+    final category = _getCategoryFromProject(tickTickTask['projectId']);
+
+    // ポモドーロ数の見積もり（優先度から判断など）
+    final priority = tickTickTask['priority'] as int? ?? 0;
+    int estimatedPomodoros = 1; // デフォルト
+
+    // 優先度に基づいてポモドーロ数を推定
+    // 0:なし、1:低、3:中、5:高
+    if (priority == 5) {
+      estimatedPomodoros = 4; // 高優先度
+    } else if (priority == 3) {
+      estimatedPomodoros = 2; // 中優先度
+    }
+
     return Task(
-      name: tickTickTask['title'] ?? '',
-      category: _extractCategoryFromTags(tickTickTask['tags']),
-      description: tickTickTask['content'] ?? '',
-      estimatedPomodoros: _extractEstimatedPomodorosFromTask(tickTickTask),
-      completedPomodoros: 0, // TickTickにはこの情報がないため初期値を設定
+      name: title,
+      category: category,
+      description: description,
+      estimatedPomodoros: estimatedPomodoros,
+      completedPomodoros: 0, // 初期値
       tickTickId: tickTickTask['id'],
     );
+  }
+
+  // プロジェクトIDからカテゴリ名を取得するヘルパーメソッド
+  String _getCategoryFromProject(String? projectId) {
+    if (projectId == null) return 'その他';
+
+    // キャッシュしたプロジェクト情報から名前を取得
+    // この部分は実装によって異なるため、簡易的な実装を示します
+    return 'TickTick'; // デフォルト値
   }
 
   // タグからカテゴリを抽出（例: 最初のタグをカテゴリとして使用）
