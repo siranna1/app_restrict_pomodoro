@@ -18,6 +18,8 @@ import 'screens/app_store_screen.dart';
 import 'services/sound_service.dart';
 import 'utils/global_context.dart';
 import 'services/settings_service.dart';
+import 'package:uni_links/uni_links.dart';
+import 'dart:io';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -114,6 +116,44 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    DatabaseHelper.instance.debugPrintDatabaseContent();
+    // URL起動処理を設定
+    _handleIncomingLinks();
+  }
+
+  // アプリ起動時のURLを処理
+  void _handleIncomingLinks() {
+    // Androidの場合
+    if (Platform.isAndroid) {
+      // 初期URLを取得
+      getInitialUri().then(_handleUri);
+
+      // 以降のURLをリッスン
+      uriLinkStream.listen((Uri? uri) {
+        _handleUri(uri);
+      }, onError: (err) {
+        print('URL起動エラー: $err');
+      });
+    }
+  }
+
+  // URIからコードを抽出して処理
+  void _handleUri(Uri? uri) {
+    if (uri != null && uri.scheme == 'pomodoro' && uri.host == 'callback') {
+      final code = uri.queryParameters['code'];
+      if (code != null) {
+        // TickTickProviderに認証コードを渡す
+        Provider.of<TickTickProvider>(context, listen: false)
+            .authenticate(code)
+            .then((success) {
+          if (success) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('TickTickとの連携に成功しました')),
+            );
+          }
+        });
+      }
+    }
   }
 
   @override

@@ -26,8 +26,9 @@ class _TickTickSyncScreenState extends State<TickTickSyncScreen> {
   // TickTickの認証ページを開く
   Future<void> _openTickTickAuth() async {
     // 注: 実際のアプリ開発では、クライアントIDを安全に管理してください
-    const clientId = 'YOUR_TICKTICK_CLIENT_ID';
-    const redirectUri = 'com.yourapp.pomodoro://oauth/callback';
+    const clientId = 'qd8SNKwQ9Z7eY6rBg6';
+    const redirectUri =
+        'https://script.google.com/macros/s/AKfycbxkOp3zrER5DR5nwVIzvc4TPkr0MfIRHQAimKMsVv2IdlPz_cSsBJ1hMLI_-H5P3LGF7A/exec';
 
     // TickTickのOAuth2認証ページURL
     final authUrl = Uri.parse(

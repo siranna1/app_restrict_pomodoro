@@ -21,8 +21,13 @@ class TickTickService {
 
   // APIキー情報（本来は環境変数などで管理）
   // 注: 実際のアプリ開発では、クライアントIDとシークレットは安全に管理してください
-  static const String _clientId = 'YOUR_TICKTICK_CLIENT_ID';
-  static const String _clientSecret = 'YOUR_TICKTICK_CLIENT_SECRET';
+// APIキー情報を環境変数や設定から読み込む
+  //static String get _clientId =>
+  //    const String.fromEnvironment('TICKTICK_CLIENT_ID', defaultValue: '');
+  static String _clientId = "qd8SNKwQ9Z7eY6rBg6";
+  //static String get _clientSecret =>
+  //    const String.fromEnvironment('TICKTICK_CLIENT_SECRET', defaultValue: '');
+  static String _clientSecret = "ugZ9Rh*tiitPi9YZk_g++X@K&s769(86";
 
   // 初期化
   Future<void> initialize() async {
@@ -85,7 +90,8 @@ class TickTickService {
           'code': authCode,
           'client_id': _clientId,
           'client_secret': _clientSecret,
-          'redirect_uri': 'com.yourapp.pomodoro://oauth/callback',
+          'redirect_uri':
+              'https://script.google.com/macros/s/AKfycbxkOp3zrER5DR5nwVIzvc4TPkr0MfIRHQAimKMsVv2IdlPz_cSsBJ1hMLI_-H5P3LGF7A/exec',
         },
       );
 

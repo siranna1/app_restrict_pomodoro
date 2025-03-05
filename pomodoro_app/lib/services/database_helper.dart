@@ -1177,4 +1177,71 @@ class DatabaseHelper {
     }
     print("==============================");
   }
+
+  // データベースの内容をデバッグ出力するメソッド
+  Future<void> debugPrintDatabaseContent() async {
+    final db = await database;
+
+    // データベース内のすべてのテーブルを取得
+    final tablesResult = await db.rawQuery(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'");
+
+    final tables =
+        tablesResult.map((table) => table['name'] as String).toList();
+
+    print("\n===== DATABASE DEBUG INFORMATION =====");
+    print("Database path: ${db.path}");
+    print("Tables found: ${tables.length}");
+
+    // 各テーブルの内容を出力
+    for (final tableName in tables) {
+      try {
+        // テーブルのスキーマを表示
+        final tableInfoResult =
+            await db.rawQuery("PRAGMA table_info($tableName)");
+        final columns = tableInfoResult
+            .map((col) => "${col['name']} (${col['type']})")
+            .join(', ');
+
+        print("\n----- TABLE: $tableName -----");
+        print("COLUMNS: $columns");
+
+        // テーブルの行数を取得
+        final countResult =
+            await db.rawQuery("SELECT COUNT(*) as count FROM $tableName");
+        final rowCount = countResult.first['count'] as int;
+        print("ROW COUNT: $rowCount");
+
+        // データが存在する場合は先頭10行を表示
+        if (rowCount > 0) {
+          final rows = await db.query(tableName, limit: 10);
+          print("\nSAMPLE DATA (up to 10 rows):");
+          for (var i = 0; i < rows.length; i++) {
+            print("Row $i: ${_formatRow(rows[i])}");
+          }
+
+          if (rowCount > 10) {
+            print("... and ${rowCount - 10} more rows");
+          }
+        } else {
+          print("\nNO DATA in this table");
+        }
+      } catch (e) {
+        print("ERROR reading table $tableName: $e");
+      }
+    }
+
+    print("\n===== END OF DATABASE DEBUG =====");
+  }
+
+// マップの内容を読みやすくフォーマットするヘルパーメソッド
+  String _formatRow(Map<String, dynamic> row) {
+    return row.entries.map((entry) {
+      // 長い値は省略
+      final value = entry.value?.toString() ?? 'null';
+      final displayValue =
+          value.length > 100 ? '${value.substring(0, 97)}...' : value;
+      return '${entry.key}: $displayValue';
+    }).join(', ');
+  }
 }
