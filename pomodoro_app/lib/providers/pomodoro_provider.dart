@@ -296,6 +296,7 @@ class PomodoroProvider with ChangeNotifier {
       isPaused = true;
       _timer?.cancel();
       soundService.stopAllSounds(); // 音を停止
+      countInterruption(); // 中断カウントを追加
       notifyListeners();
     }
   }
