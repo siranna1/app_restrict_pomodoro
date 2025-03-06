@@ -63,9 +63,13 @@ class AppRestrictionProvider with ChangeNotifier {
       final hasPermission =
           await _androidAppController.hasUsageStatsPermission();
       if (!hasPermission) {
-        // ここで権限リクエストのUIを表示する方法を検討してください
         _needsPermissionGuide = true;
+        print("使用状況へのアクセス権限がありません。権限ガイドを表示します。");
+      } else {
+        print("使用状況へのアクセス権限があります。監視機能が利用可能です。");
       }
+    } else {
+      print("未サポートのプラットフォームです。");
     }
   }
 
@@ -210,6 +214,8 @@ class AppRestrictionProvider with ChangeNotifier {
       if (platformUtils.isWindows) {
         // Windows用の処理
         await _windowsAppController.updateRestrictedApp(app);
+        // 更新成功後にリストを再読み込み
+        await _loadRestrictedApps();
       } else if (platformUtils.isAndroid) {
         // Android用の処理 - SQLiteに直接更新
         final db = await DatabaseHelper.instance.database;
@@ -220,14 +226,13 @@ class AppRestrictionProvider with ChangeNotifier {
           whereArgs: [app.id],
         );
 
+        // 更新成功後にリストを再読み込み
+        await _loadRestrictedApps();
         // 監視中なら制限リストを更新
         if (isMonitoring) {
           await _androidAppController.updateRestrictedApps(restrictedApps);
         }
       }
-
-      // 更新成功後にリストを再読み込み
-      await _loadRestrictedApps();
 
       print("アプリ更新完了: ${app.name}");
     } catch (e) {
@@ -347,5 +352,46 @@ class AppRestrictionProvider with ChangeNotifier {
         ],
       ),
     );
+  }
+
+  /// 必要な権限を持っているかチェックするメソッド
+  Future<bool> hasPermission() async {
+    final platformUtils = PlatformUtils();
+
+    if (platformUtils.isAndroid) {
+      // Androidの場合はUsageStats権限をチェック
+      return await _androidAppController.hasUsageStatsPermission();
+    } else if (platformUtils.isWindows) {
+      // Windowsの場合は常にtrueを返す（特別な権限は不要）
+      return true;
+    }
+
+    // その他のプラットフォームではfalseを返す
+    return false;
+  }
+
+  /// オーバーレイ権限があるかチェック (Android専用)
+  Future<bool> hasOverlayPermission() async {
+    final platformUtils = PlatformUtils();
+    if (!platformUtils.isAndroid) return true;
+
+    try {
+      return await _androidAppController.hasOverlayPermission();
+    } catch (e) {
+      print('オーバーレイ権限チェックエラー: $e');
+      return false;
+    }
+  }
+
+  /// オーバーレイ権限リクエスト (Android専用)
+  Future<void> requestOverlayPermission() async {
+    final platformUtils = PlatformUtils();
+    if (!platformUtils.isAndroid) return;
+
+    try {
+      await _androidAppController.requestOverlayPermission();
+    } catch (e) {
+      print('オーバーレイ権限リクエストエラー: $e');
+    }
   }
 }

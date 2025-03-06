@@ -25,7 +25,7 @@ class TickTickService {
 
   // APIキー情報を環境変数や設定から読み込む
   static String _clientId = "qd8SNKwQ9Z7eY6rBg6";
-  static String _clientSecret = "ugZ9Rh*tiitPi9YZk_g++X@K&s769(86)";
+  static String _clientSecret = "ugZ9Rh*tiitPi9YZk_g++X@K&s769(86";
 
   // 初期化
   Future<void> initialize() async {

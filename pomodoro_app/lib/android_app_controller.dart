@@ -137,6 +137,25 @@ class AndroidAppController {
     }
   }
 
+  /// オーバーレイ権限があるか確認
+  Future<bool> hasOverlayPermission() async {
+    try {
+      return await _channel.invokeMethod('checkOverlayPermission') ?? false;
+    } catch (e) {
+      print('オーバーレイ権限確認エラー: $e');
+      return false;
+    }
+  }
+
+  /// オーバーレイ権限の設定画面を開く
+  Future<void> requestOverlayPermission() async {
+    try {
+      await _channel.invokeMethod('requestOverlayPermission');
+    } catch (e) {
+      print('オーバーレイ権限リクエストエラー: $e');
+    }
+  }
+
   /// 監視状態を取得
   bool get isMonitoring => _isMonitoring;
 }

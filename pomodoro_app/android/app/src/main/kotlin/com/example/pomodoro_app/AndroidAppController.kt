@@ -23,7 +23,19 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.io.ByteArrayOutputStream
 import java.util.*
-
+import android.graphics.PixelFormat
+import android.net.Uri
+import android.os.Handler
+import android.os.Looper
+import android.os.Vibrator
+import android.os.VibrationEffect
+import android.view.Gravity
+import android.view.LayoutInflater
+import android.view.WindowManager
+import android.widget.Button
+import android.widget.TextView
+import android.view.View
+import android.view.MotionEvent
 class AndroidAppController(
     private val context: Context,
     private val activity: Activity
@@ -37,6 +49,12 @@ class AndroidAppController(
             channel.setMethodCallHandler(AndroidAppController(context, activity))
         }
     }
+    // 現在表示中のオーバーレイを追跡するための変数
+    private var currentOverlayView: View? = null
+    private var overlayShownTimestamp: Long = 0
+    private var lastRestrictedPackage: String? = null
+    // 監視タイマーの間隔を長くする（1秒から3秒に）
+    private val MONITORING_INTERVAL = 3000L  // 3秒ごとにチェック
     
     private var monitorTimer: Timer? = null
     private var restrictedPackages: List<String> = ArrayList()
@@ -91,6 +109,16 @@ class AndroidAppController(
             "getInstalledApps" -> {
                 result.success(getInstalledApps())
             }
+            "checkOverlayPermission" -> {
+                result.success(Settings.canDrawOverlays(context))
+            }
+            "requestOverlayPermission" -> {
+                val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
+                intent.data = Uri.parse("package:${context.packageName}")
+                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                context.startActivity(intent)
+                result.success(true)
+            }
             else -> {
                 result.notImplemented()
             }
@@ -118,20 +146,43 @@ class AndroidAppController(
     
     private fun startMonitoring() {
         if (isMonitoring) return
-        
+        println("Android監視サービス開始を試みます")
+        if (!hasUsageStatsPermission()) {
+            println("使用状況アクセス権限がありません - 監視開始できません")
+            return
+        }
         isMonitoring = true
+        println("Android監視サービス開始: ${Date()}")
         monitorTimer = Timer().apply {
             scheduleAtFixedRate(object : TimerTask() {
                 override fun run() {
-                    val currentApp = getCurrentForegroundApp()
-                    if (currentApp != null && restrictedPackages.contains(currentApp)) {
-                        killApp(currentApp)
-                        activity.runOnUiThread {
-                            // 通知処理
+                    try {
+                        val currentApp = getCurrentForegroundApp()
+                        // ログ出力でデバッグ
+                        println("現在実行中のアプリ: $currentApp")
+
+                        if (currentApp != null && restrictedPackages.contains(currentApp)) {
+                            println("制限対象アプリを検出: $currentApp")
+
+                            // 制限対象アプリが起動中なので終了させる
+                            killApp(currentApp)
+
+                            // UI通知用にメインスレッドで処理する
+                            activity.runOnUiThread {
+                                // 通知を表示
+                                val toast = android.widget.Toast.makeText(
+                                    context,
+                                    "制限アプリ「$currentApp」の使用を停止しました",
+                                    android.widget.Toast.LENGTH_LONG
+                                )
+                                toast.show()
+                            }
                         }
+                    } catch (e: Exception) {
+                        println("アプリ監視中にエラー: ${e.message}")
                     }
                 }
-            }, 0, 1000)
+            }, 0, MONITORING_INTERVAL) // 1秒ごとにチェック
         }
     }
     
@@ -142,29 +193,195 @@ class AndroidAppController(
     }
     
     private fun killApp(packageName: String) {
-        val am = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-        am.killBackgroundProcesses(packageName)
+        try {
+            println("アプリ $packageName を終了させます")
+            // オーバーレイダイアログを表示
+            showOverlayRestrictionDialog(packageName)
+            val am = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+            am.killBackgroundProcesses(packageName)
+            println("アプリ $packageName を終了させました")
+        } catch (e: Exception) {
+            println("アプリの終了エラー: ${e.message}")
+        }
+    }
+    // 新しく追加するオーバーレイダイアログ表示関数
+    private fun showOverlayRestrictionDialog(packageName: String) {
+        if (!Settings.canDrawOverlays(context)) {
+            // オーバーレイ権限がない場合は権限設定画面を開く
+            val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
+            intent.data = Uri.parse("package:${context.packageName}")
+            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            context.startActivity(intent)
+            return
+        }
+
+          // 同じパッケージに対するオーバーレイが5秒以内に表示されていたらスキップ
+        val currentTime = System.currentTimeMillis()
+        if (lastRestrictedPackage == packageName && 
+            currentTime - overlayShownTimestamp < 5000) {
+            return
+        }
+
+        activity.runOnUiThread {
+            // 既存のオーバーレイがあれば閉じる
+            removeCurrentOverlay()
+
+            val appName = getAppName(packageName)
+
+            // オーバーレイウィンドウの作成
+            val inflater = context.getSystemService(Context.LAYOUT_INFLATER_SERVICE) as LayoutInflater
+            val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+
+            // レイアウトをインフレート
+            val view = inflater.inflate(R.layout.overlay_restriction, null)
+
+            // タイトルとメッセージのセット
+            val titleTextView = view.findViewById<TextView>(R.id.overlay_title)
+            val messageTextView = view.findViewById<TextView>(R.id.overlay_message)
+            val closeButton = view.findViewById<Button>(R.id.close_button)
+
+            titleTextView.text = "アプリ制限"
+            messageTextView.text = "「$appName」は現在制限されています。\nポモドーロを完了して、アプリを解除しましょう。"
+
+            // ウィンドウパラメータの設定
+            val params = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT,  // 幅を画面いっぱいに
+                WindowManager.LayoutParams.MATCH_PARENT,
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) 
+                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                else 
+                    WindowManager.LayoutParams.TYPE_PHONE,
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or// タッチイベントを受け取る
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or  
+                    WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,  // 外部タッチを監視
+                PixelFormat.TRANSLUCENT
+            )
+
+            params.gravity = Gravity.CENTER
+
+            // 閉じるボタンのクリックリスナー
+            closeButton.setOnClickListener {
+                removeCurrentOverlay()
+
+                // ホーム画面に戻る
+                val homeIntent = Intent(Intent.ACTION_MAIN)
+                homeIntent.addCategory(Intent.CATEGORY_HOME)
+                homeIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                context.startActivity(homeIntent)
+
+                // バイブレーション（触覚フィードバック）
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+                    vibrator.vibrate(VibrationEffect.createOneShot(300, VibrationEffect.DEFAULT_AMPLITUDE))
+                }
+            }
+
+            // 画面全体のタッチイベントを処理
+            view.setOnTouchListener { _, event ->
+                // タッチイベントを検出したら、閉じるボタンと同じ処理を実行
+                if (event.action == MotionEvent.ACTION_DOWN) {
+                    removeCurrentOverlay()
+
+                    // ホーム画面に戻る
+                    val homeIntent = Intent(Intent.ACTION_MAIN)
+                    homeIntent.addCategory(Intent.CATEGORY_HOME)
+                    homeIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    context.startActivity(homeIntent)
+
+                    // バイブレーション
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        val vibrator = context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+                        vibrator.vibrate(VibrationEffect.createOneShot(300, VibrationEffect.DEFAULT_AMPLITUDE))
+                    }
+                    true
+                } else {
+                    false
+                }
+            }
+            // 保存して表示
+            try {
+                windowManager.addView(view, params)
+                currentOverlayView = view
+                overlayShownTimestamp = currentTime
+                lastRestrictedPackage = packageName
+            } catch (e: Exception) {
+                println("オーバーレイ表示エラー: ${e.message}")
+            }
+
+            // 5秒後に自動的に閉じる（オプション）
+            /*
+            Handler(Looper.getMainLooper()).postDelayed({
+                try {
+                    windowManager.removeView(view)
+                    // ホーム画面に戻る
+                    val homeIntent = Intent(Intent.ACTION_MAIN)
+                    homeIntent.addCategory(Intent.CATEGORY_HOME)
+                    homeIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    context.startActivity(homeIntent)
+                } catch (e: Exception) {
+                    // ビューがすでに削除されている可能性がある
+                }
+            }, 5000)
+            */
+        }
+    }
+     // 現在のオーバーレイを削除するヘルパーメソッド
+    private fun removeCurrentOverlay() {
+        val view = currentOverlayView
+        if (view != null) {
+            try {
+                val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+                windowManager.removeView(view)
+            } catch (e: Exception) {
+                println("オーバーレイ削除エラー: ${e.message}")
+            }
+            currentOverlayView = null
+        }
+        
+    }
+
+    // パッケージ名からアプリ名を取得するヘルパーメソッド
+    private fun getAppName(packageName: String): String {
+        try {
+            val pm = context.packageManager
+            val appInfo = pm.getApplicationInfo(packageName, 0)
+            return pm.getApplicationLabel(appInfo).toString()
+        } catch (e: Exception) {
+            return packageName
+        }
     }
     
     private fun getCurrentForegroundApp(): String? {
         if (!hasUsageStatsPermission()) {
             return null
         }
-        
-        val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-        val time = System.currentTimeMillis()
-        val appList = usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, time - 60000, time)
-        
-        if (appList != null && appList.isNotEmpty()) {
-            val mySortedMap = TreeMap<Long, UsageStats>()
-            for (usageStats in appList) {
-                mySortedMap[usageStats.lastTimeUsed] = usageStats
+
+        try {
+            val usm = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+            val time = System.currentTimeMillis()
+            // 過去5秒間の使用状況を取得
+            val appList = usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, time - 5000, time)
+
+            if (appList != null && appList.isNotEmpty()) {
+                // 最後に使用したアプリを特定
+                var recentApp: UsageStats? = null
+                var latestTime = 0L
+
+                for (usageStats in appList) {
+                    if (usageStats.lastTimeUsed > latestTime) {
+                        latestTime = usageStats.lastTimeUsed
+                        recentApp = usageStats
+                    }
+                }
+
+                if (recentApp != null) {
+                    return recentApp.packageName
+                }
             }
-            if (mySortedMap.isNotEmpty()) {
-                return mySortedMap[mySortedMap.lastKey()]?.packageName
-            }
+        } catch (e: Exception) {
+            println("現在のフォアグラウンドアプリ取得エラー: ${e.message}")
         }
-        
+
         return null
     }
 
@@ -291,5 +508,6 @@ class AndroidAppController(
     // アプリケーションが終了する時にリソースを解放
     fun dispose() {
         stopMonitoring()
+        removeCurrentOverlay()
     }
 }

@@ -379,10 +379,10 @@ class _AndroidAppSelectionScreenState extends State<AndroidAppSelectionScreen> {
                 ),
                 const SizedBox(width: 16.0),
                 Expanded(
-                  child: ElevatedButton(
+                  child: OutlinedButton(
                     onPressed: _saveSelectedApps,
                     child: const Text('追加'),
-                    style: ElevatedButton.styleFrom(
+                    style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16.0),
                     ),
                   ),
