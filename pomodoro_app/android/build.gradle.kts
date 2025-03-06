@@ -3,7 +3,23 @@ allprojects {
         google()
         mavenCentral()
     }
+    
 }
+buildscript {
+    repositories {
+        google()  
+        mavenCentral() 
+    }
+    extra["coreLibraryDesugaringEnabled"] = true
+
+    dependencies {
+        
+         classpath("com.android.tools.build:gradle:7.4.0")
+    }
+}
+
+
+
 
 val newBuildDir: Directory = rootProject.layout.buildDirectory.dir("../../build").get()
 rootProject.layout.buildDirectory.value(newBuildDir)

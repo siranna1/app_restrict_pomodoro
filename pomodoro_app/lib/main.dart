@@ -18,7 +18,8 @@ import 'screens/app_store_screen.dart';
 import 'services/sound_service.dart';
 import 'utils/global_context.dart';
 import 'services/settings_service.dart';
-import 'package:uni_links/uni_links.dart';
+//import 'package:uni_links/uni_links.dart';
+import 'package:app_links/app_links.dart';
 import 'dart:io';
 
 void main() async {
@@ -43,6 +44,8 @@ void main() async {
 
   //タスクプロバイダーを作成
   final taskProvider = TaskProvider();
+
+  final appLinks = AppLinks();
 
   // バックグラウンドサービスの初期化
   if (platformService.supportsBackgroundExecution) {
@@ -104,6 +107,7 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   int _selectedIndex = 0;
+  final AppLinks _appLinks = AppLinks();
 
   final List<Widget> _screens = [
     const HomeScreen(),
@@ -126,10 +130,10 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     // Androidの場合
     if (Platform.isAndroid) {
       // 初期URLを取得
-      getInitialUri().then(_handleUri);
+      _appLinks.getInitialLink().then(_handleUri);
 
       // 以降のURLをリッスン
-      uriLinkStream.listen((Uri? uri) {
+      _appLinks.uriLinkStream.listen((Uri? uri) {
         _handleUri(uri);
       }, onError: (err) {
         print('URL起動エラー: $err');

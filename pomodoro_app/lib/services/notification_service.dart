@@ -20,8 +20,8 @@ class NotificationService {
       const AndroidInitializationSettings initializationSettingsAndroid =
           AndroidInitializationSettings('@mipmap/launcher_icon');
 
-      const IOSInitializationSettings initializationSettingsIOS =
-          IOSInitializationSettings(
+      const DarwinInitializationSettings initializationSettingsIOS =
+          DarwinInitializationSettings(
         requestAlertPermission: true,
         requestBadgePermission: true,
         requestSoundPermission: true,
@@ -64,8 +64,8 @@ class NotificationService {
         showWhen: true,
       );
 
-      const IOSNotificationDetails iOSPlatformChannelSpecifics =
-          IOSNotificationDetails(
+      const DarwinNotificationDetails iOSPlatformChannelSpecifics =
+          DarwinNotificationDetails(
         presentAlert: true,
         presentBadge: true,
         presentSound: true,
@@ -110,8 +110,8 @@ class NotificationService {
       priority: Priority.high,
     );
 
-    const IOSNotificationDetails iOSPlatformChannelSpecifics =
-        IOSNotificationDetails();
+    const DarwinNotificationDetails iOSPlatformChannelSpecifics =
+        DarwinNotificationDetails();
 
     const NotificationDetails platformChannelSpecifics = NotificationDetails(
       android: androidPlatformChannelSpecifics,
@@ -124,7 +124,8 @@ class NotificationService {
       body,
       tzScheduledTime,
       platformChannelSpecifics,
-      androidAllowWhileIdle: true,
+//      androidAllowWhileIdle: true,
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.absoluteTime,
     );
