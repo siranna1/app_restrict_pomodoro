@@ -51,6 +51,7 @@ dependencies:
   image: ^4.0.0
 #  uni_links: ^0.5.1
   app_links: ^6.4.0
+  #device_apps: ^2.2.0  # アプリのアイコンなどの情報を取得するプラグイン
   
 
 

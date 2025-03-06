@@ -6,7 +6,7 @@ import '../providers/app_restriction_provider.dart';
 import '../models/restricted_app.dart';
 import '../models/app_usage_session.dart';
 import '../services/database_helper.dart';
-import 'app_restriction_screen.dart';
+import 'android_app_selection_screen.dart';
 import 'package:file_picker/file_picker.dart';
 import '../widgets/AddAppDialog.dart';
 
@@ -25,6 +25,10 @@ class _AppStoreScreenState extends State<AppStoreScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    // 初期化後、権限ガイドの確認を行う
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkPermissionGuide();
+    });
   }
 
   @override
@@ -127,6 +131,14 @@ class _AppStoreScreenState extends State<AppStoreScreen>
       ),
     );
   }
+
+  void _checkPermissionGuide() {
+    final appRestrictionProvider =
+        Provider.of<AppRestrictionProvider>(context, listen: false);
+    if (appRestrictionProvider.needsPermissionGuide) {
+      appRestrictionProvider.showPermissionGuideIfNeeded(context);
+    }
+  }
 }
 
 // アプリストアタブ
@@ -151,7 +163,20 @@ class AppStoreTab extends StatelessWidget {
             ElevatedButton.icon(
               icon: const Icon(Icons.add),
               label: const Text('アプリを追加'),
-              onPressed: () => _showAddAppDialog(context),
+              onPressed: () {
+                // Androidかどうかをチェック
+                if (Theme.of(context).platform == TargetPlatform.android) {
+                  // Android用のアプリ選択画面に遷移
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const AndroidAppSelectionScreen(),
+                    ),
+                  );
+                } else {
+                  // 既存のダイアログを表示（Windows用）
+                  _showAddAppDialog(context);
+                }
+              },
             ),
           ],
         ),
@@ -518,6 +543,7 @@ class SettingsTab extends StatelessWidget {
             value: appRestrictionProvider.isMonitoring,
             onChanged: (value) {
               if (value) {
+                _toggleMonitoring(context);
                 appRestrictionProvider.startMonitoring();
               } else {
                 appRestrictionProvider.stopMonitoring();
@@ -552,7 +578,20 @@ class SettingsTab extends StatelessWidget {
             child: ElevatedButton.icon(
               icon: Icon(Icons.add),
               label: Text('アプリを追加'),
-              onPressed: () => _showAddAppDialog(context),
+              onPressed: () {
+                // Androidかどうかをチェック
+                if (Theme.of(context).platform == TargetPlatform.android) {
+                  // Android用のアプリ選択画面に遷移
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const AndroidAppSelectionScreen(),
+                    ),
+                  );
+                } else {
+                  // 既存のダイアログを表示（Windows用）
+                  _showAddAppDialog(context);
+                }
+              },
             ),
           ),
         ],
@@ -846,6 +885,22 @@ class SettingsTab extends StatelessWidget {
             backgroundColor: Colors.red,
           ),
         );
+      }
+    }
+  }
+
+  // また、監視を開始するボタンがあるなら、そのonPressedでも確認
+  void _toggleMonitoring(BuildContext context) {
+    final appRestrictionProvider =
+        Provider.of<AppRestrictionProvider>(context, listen: false);
+
+    if (appRestrictionProvider.isMonitoring) {
+      appRestrictionProvider.stopMonitoring();
+    } else {
+      appRestrictionProvider.startMonitoring();
+      // 権限が必要なら自動的にダイアログが表示される
+      if (appRestrictionProvider.needsPermissionGuide) {
+        appRestrictionProvider.showPermissionGuideIfNeeded(context);
       }
     }
   }
