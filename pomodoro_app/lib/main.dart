@@ -21,9 +21,13 @@ import 'services/settings_service.dart';
 //import 'package:uni_links/uni_links.dart';
 import 'package:app_links/app_links.dart';
 import 'dart:io';
+import 'android_app_controller.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  AndroidAppController.staticInitialize();
+
   // 設定サービスを初期化
   final settingsService = SettingsService();
   await settingsService.init();

@@ -51,6 +51,7 @@ class AppMonitorService : Service() {
     private var currentOverlayView: View? = null
     private var overlayShownTimestamp: Long = 0
     private var lastRestrictedPackage: String? = null
+    private var unlockExpirationsTimer: Timer? = null
     
     // Binderの実装
     private val binder = LocalBinder()
@@ -87,6 +88,9 @@ class AppMonitorService : Service() {
                     println("制限パッケージリストを更新: $packages")
                     restrictedPackages = packages
                 }
+            }
+            "START_EXPIRATION_CHECKER" -> {
+                startUnlockExpirationChecker()
             }
             else -> {
                 println("不明なコマンド: ${intent?.action}")
@@ -147,7 +151,9 @@ class AppMonitorService : Service() {
         }
         println("アプリ監視サービスを開始 at appmonitorservice.kt")
         isRunning = true
-        
+
+        startUnlockExpirationChecker()
+
         monitorTimer = Timer().apply {
             scheduleAtFixedRate(object : TimerTask() {
                 override fun run() {
@@ -177,9 +183,37 @@ class AppMonitorService : Service() {
         monitorTimer = null
         isRunning = false
         
+        unlockExpirationsTimer?.cancel()
+        unlockExpirationsTimer = null
+
         // フォアグラウンドサービスを停止
         stopForeground(true)
         stopSelf()
+    }
+
+    // 期限切れをチェックするタイマーを開始
+    private fun startUnlockExpirationChecker() {
+        unlockExpirationsTimer?.cancel()
+
+        unlockExpirationsTimer = Timer().apply {
+            scheduleAtFixedRate(object : TimerTask() {
+                override fun run() {
+                    try {
+                        checkUnlockExpirations()
+                    } catch (e: Exception) {
+                        println("期限切れチェック中にエラー: ${e.message}")
+                    }
+                }
+            }, 0, 60000) // 1分ごとにチェック
+        }
+        println("期限切れチェックタイマーを開始しました")
+    }
+    // 期限切れをチェックするメソッド
+    private fun checkUnlockExpirations() {
+        // Flutterアプリに期限切れチェックを要求するブロードキャストを送信
+        val intent = Intent("com.example.pomodoro_app.CHECK_EXPIRATIONS")
+        sendBroadcast(intent)
+        println("期限切れチェックのブロードキャストを送信しました")
     }
     
     private fun hasUsageStatsPermission(): Boolean {

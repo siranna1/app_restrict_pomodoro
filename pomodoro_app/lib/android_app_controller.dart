@@ -2,6 +2,7 @@
 import 'package:flutter/services.dart';
 import 'dart:async';
 import './models/restricted_app.dart';
+import './providers/app_restriction_provider.dart';
 
 class AndroidAppController {
   static const MethodChannel _channel =
@@ -14,6 +15,23 @@ class AndroidAppController {
       AndroidAppController._internal();
   factory AndroidAppController() => _instance;
   AndroidAppController._internal();
+
+  static void staticInitialize() {
+    _channel.setMethodCallHandler(_methodCallHandler);
+  }
+
+  // メソッドコールハンドラー
+  static Future<dynamic> _methodCallHandler(MethodCall call) async {
+    switch (call.method) {
+      case 'checkUnlockExpirations':
+        return await AppRestrictionProvider.checkExpirations();
+      default:
+        throw PlatformException(
+          code: 'Unimplemented',
+          details: 'Method ${call.method} not implemented',
+        );
+    }
+  }
 
   /// 初期化処理
   Future<bool> initialize() async {

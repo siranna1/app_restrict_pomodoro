@@ -66,63 +66,18 @@ class AppRestrictionProvider with ChangeNotifier {
     });
   }
 
-  Future<void> _checkUnlockExpirations() async {
-    print("解除期限チェックを実行中...");
-    bool needsUpdate = false;
-    //RestrictedApp needUpdateApp = restrictedApps.first;
-    final now = DateTime.now();
-    final platformUtils = PlatformUtils();
-
-    // 解除期限が切れたアプリを確認
-    for (final app in restrictedApps) {
-      if (app.isCurrentlyUnlocked && app.currentSessionEnd != null) {
-        if (now.isAfter(app.currentSessionEnd!)) {
-          print("${app.name}の解除期限が切れました。制限を再開します。");
-
-          // アプリの解除状態をリセット
-          final updatedApp = app.copyWith(currentSessionEnd: null);
-          //needUpdateApp = updatedApp;
-          await DatabaseHelper.instance.updateRestrictedApp(updatedApp);
-
-          // 現在のインスタンスも更新
-          final index = restrictedApps.indexWhere((a) => a.id == app.id);
-          if (index >= 0) {
-            restrictedApps[index] = updatedApp;
-          }
-
-          needsUpdate = true;
-        }
-      }
-    }
-
-    // 変更があった場合のみ監視サービスを更新
-    if (needsUpdate) {
-      // サービスに制限リスト更新を通知
-      if (isMonitoring) {
-        if (platformUtils.isAndroid) {
-          // Android側のサービスに制限リスト更新を通知
-          await _updateAndroidMonitoringServiceAppList();
-        } else if (platformUtils.isWindows) {
-          // Windows側の監視に制限リスト更新を通知
-          await _windowsAppController.manualUpdatePomodoroCount();
-
-          // Windows用の追加更新処理（更新されたアプリリストを反映）
-          for (var app in restrictedApps) {
-            if (app.id != null) {
-              await _windowsAppController.updateRestrictedApp(app);
-            }
-          }
-        }
-      }
-      notifyListeners();
-    }
-  }
-
   // 静的メソッドを追加
   static Future<void> notifyPomodoroCompleted() async {
     if (_instance != null) {
       await _instance!.onPomodoroCompleted();
     }
+  }
+
+  static Future<bool> checkExpirations() async {
+    if (_instance != null) {
+      return await _instance!._checkAndUpdateExpirations();
+    }
+    return false;
   }
 
   Future<void> _initializeController() async {
@@ -466,6 +421,117 @@ class AppRestrictionProvider with ChangeNotifier {
       return true;
     } catch (e) {
       print('アプリ解除中にエラーが発生: $e');
+      return false;
+    }
+  }
+
+  Future<void> _checkUnlockExpirations() async {
+    print("解除期限チェックを実行中...");
+    bool needsUpdate = false;
+    //RestrictedApp needUpdateApp = restrictedApps.first;
+    final now = DateTime.now();
+    final platformUtils = PlatformUtils();
+
+    // 解除期限が切れたアプリを確認
+    for (final app in restrictedApps) {
+      if (app.isCurrentlyUnlocked && app.currentSessionEnd != null) {
+        if (now.isAfter(app.currentSessionEnd!)) {
+          print("${app.name}の解除期限が切れました。制限を再開します。");
+
+          // アプリの解除状態をリセット
+          final updatedApp = app.copyWith(currentSessionEnd: null);
+          //needUpdateApp = updatedApp;
+          await DatabaseHelper.instance.updateRestrictedApp(updatedApp);
+
+          // 現在のインスタンスも更新
+          final index = restrictedApps.indexWhere((a) => a.id == app.id);
+          if (index >= 0) {
+            restrictedApps[index] = updatedApp;
+          }
+
+          needsUpdate = true;
+        }
+      }
+    }
+
+    // 変更があった場合のみ監視サービスを更新
+    if (needsUpdate) {
+      // サービスに制限リスト更新を通知
+      if (isMonitoring) {
+        if (platformUtils.isAndroid) {
+          // Android側のサービスに制限リスト更新を通知
+          await _updateAndroidMonitoringServiceAppList();
+        } else if (platformUtils.isWindows) {
+          // Windows側の監視に制限リスト更新を通知
+          await _windowsAppController.manualUpdatePomodoroCount();
+
+          // Windows用の追加更新処理（更新されたアプリリストを反映）
+          for (var app in restrictedApps) {
+            if (app.id != null) {
+              await _windowsAppController.updateRestrictedApp(app);
+            }
+          }
+        }
+      }
+      notifyListeners();
+    }
+  }
+
+  // アプリが実行中でなくても動作する期限切れチェック
+  // アンドロイド用
+  Future<bool> _checkAndUpdateExpirations() async {
+    print("バックグラウンドで解除期限チェックを実行中...");
+    bool needsUpdate = false;
+
+    try {
+      final db = await DatabaseHelper.instance.database;
+      final now = DateTime.now();
+
+      // DBから直接制限アプリを取得して期限をチェック
+      final results = await db.query('restricted_apps');
+
+      for (var row in results) {
+        final app = RestrictedApp.fromMap(row);
+
+        // 解除中だが期限切れの場合
+        if (app.currentSessionEnd != null &&
+            now.isAfter(app.currentSessionEnd!)) {
+          print("${app.name}の解除期限が切れました。制限を再開します。");
+
+          // 期限をnullに設定して更新
+          final updatedData = app.copyWith(currentSessionEnd: null).toMap();
+          await db.update(
+            'restricted_apps',
+            updatedData,
+            where: 'id = ?',
+            whereArgs: [app.id],
+          );
+
+          needsUpdate = true;
+        }
+      }
+
+      // メモリ内のリストも更新
+      if (needsUpdate) {
+        await _loadRestrictedApps();
+
+        // 監視サービスに通知
+        if (isMonitoring) {
+          final platformUtils = PlatformUtils();
+
+          if (platformUtils.isAndroid) {
+            await _updateAndroidMonitoringServiceAppList();
+          } else if (platformUtils.isWindows) {
+            await _windowsAppController.manualUpdatePomodoroCount();
+          }
+        }
+
+        notifyListeners();
+      }
+
+      return needsUpdate;
+    } catch (e) {
+      print("バックグラウンド期限チェックエラー: $e");
       return false;
     }
   }

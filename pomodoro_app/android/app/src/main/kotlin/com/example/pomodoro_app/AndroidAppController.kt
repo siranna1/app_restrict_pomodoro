@@ -138,6 +138,19 @@ class AndroidAppController(
                 openBatteryOptimizationSettings()
                 result.success(true)
             }
+            "checkUnlockExpirations" -> {
+                println("期限切れチェックタイマーサービス開始")
+                val intent = Intent(context, AppMonitorService::class.java)
+                intent.action = "START_EXPIRATION_CHECKER"
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    println("startForegroundService を呼び出します")
+                    context.startForegroundService(intent)
+                } else {
+                    println("startService を呼び出します")
+                    context.startService(intent)
+                }
+                result.success(true)
+            }
             else -> {
                 result.notImplemented()
             }
