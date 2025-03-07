@@ -1,4 +1,14 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.example.pomodoro_app">
+    <!-- 使用状況統計へのアクセス権限 -->
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
+    
+    <!-- バックグラウンドプロセスを終了する権限 -->
+    <uses-permission android:name="android.permission.KILL_BACKGROUND_PROCESSES" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
     <application
         android:label="pomodoro_app"
         android:name="${applicationName}"
@@ -44,6 +54,11 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+            
+        </intent>
+        <intent>
+        <action android:name="android.intent.action.MAIN" />
         </intent>
     </queries>
+
 </manifest>

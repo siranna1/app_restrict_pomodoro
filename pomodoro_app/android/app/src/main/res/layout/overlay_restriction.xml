@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#80000000">  <!-- 半透明の黒色背景 -->
+    
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="#FFFFFF"
+        android:padding="24dp"
+        android:layout_gravity="center"
+        android:layout_marginLeft="32dp"
+        android:layout_marginRight="32dp">
+        
+        <TextView
+            android:id="@+id/overlay_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="アプリ制限"
+            android:textColor="#E53935"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:gravity="center" />
+            
+        <TextView
+            android:id="@+id/overlay_message"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="このアプリは現在制限されています。"
+            android:textSize="16sp"
+            android:gravity="center" />
+            
+        <Button
+            android:id="@+id/close_button"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="閉じる"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="#E53935" />
+    </LinearLayout>
+</FrameLayout>

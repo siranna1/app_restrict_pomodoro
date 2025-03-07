@@ -123,6 +123,59 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     //DatabaseHelper.instance.debugPrintDatabaseContent();
     // URL起動処理を設定
     _handleIncomingLinks();
+
+    // プラットフォームをチェックして自動監視開始
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _startMonitoringIfAndroid();
+    });
+  }
+
+  // Android向けの自動監視開始
+  void _startMonitoringIfAndroid() async {
+    final platformUtils = PlatformUtils();
+    if (platformUtils.isAndroid) {
+      final appRestrictionProvider =
+          Provider.of<AppRestrictionProvider>(context, listen: false);
+      // 使用状況アクセス権限があるかチェック
+      final hasUsagePermission = await appRestrictionProvider.hasPermission();
+      // 権限があるかチェック
+      final hasPermission = await appRestrictionProvider.hasPermission();
+      // オーバーレイ権限があるかチェック（新規追加）
+      final hasOverlayPerm =
+          await appRestrictionProvider.hasOverlayPermission();
+      if (!hasOverlayPerm) {
+        // オーバーレイ権限がない場合は設定画面を開く
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('オーバーレイ権限が必要です'),
+            content:
+                const Text('アプリ制限機能を使用するには、他のアプリの上に表示する権限が必要です。設定画面を開いてください。'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('後で'),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  appRestrictionProvider.requestOverlayPermission();
+                },
+                child: const Text('設定を開く'),
+              ),
+            ],
+          ),
+        );
+      }
+      if (hasPermission) {
+        // 監視開始
+        appRestrictionProvider.startMonitoring();
+        print('Androidアプリ監視を自動開始しました');
+      } else {
+        // 権限ガイドを表示
+        appRestrictionProvider.showPermissionGuideIfNeeded(context);
+      }
+    }
   }
 
   // アプリ起動時のURLを処理
