@@ -78,6 +78,41 @@ class AndroidAppController {
       return false;
     }
   }
+  // android_app_controller.dart に以下のメソッドを追加
+
+  /// サービスとして監視を開始
+  Future<bool> startMonitoringService(List<String> packages) async {
+    print('startMonitoringService: $packages');
+    try {
+      return await _channel.invokeMethod('startMonitoringService', {
+            'packages': packages,
+          }) ??
+          false;
+    } catch (e) {
+      print('サービス起動エラー: $e');
+      return false;
+    }
+  }
+
+  /// サービスを停止
+  Future<bool> stopMonitoringService() async {
+    try {
+      return await _channel.invokeMethod('stopMonitoringService') ?? false;
+    } catch (e) {
+      print('サービス停止エラー: $e');
+      return false;
+    }
+  }
+
+  /// サービスが実行中かどうかを確認
+  Future<bool> isServiceRunning() async {
+    try {
+      return await _channel.invokeMethod('isServiceRunning') ?? false;
+    } catch (e) {
+      print('サービス状態確認エラー: $e');
+      return false;
+    }
+  }
 
   /// 制限対象アプリのリストを更新
   Future<bool> updateRestrictedApps(List<RestrictedApp> apps) async {
@@ -153,6 +188,25 @@ class AndroidAppController {
       await _channel.invokeMethod('requestOverlayPermission');
     } catch (e) {
       print('オーバーレイ権限リクエストエラー: $e');
+    }
+  }
+
+  /// バッテリー最適化が無効になっているか確認
+  Future<bool> isBatteryOptimizationIgnored() async {
+    try {
+      return await _channel.invokeMethod('checkBatteryOptimization') ?? false;
+    } catch (e) {
+      print('バッテリー最適化状態確認エラー: $e');
+      return false;
+    }
+  }
+
+  /// バッテリー最適化設定画面を開く
+  Future<void> openBatteryOptimizationSettings() async {
+    try {
+      await _channel.invokeMethod('openBatteryOptimizationSettings');
+    } catch (e) {
+      print('バッテリー最適化設定画面オープンエラー: $e');
     }
   }
 

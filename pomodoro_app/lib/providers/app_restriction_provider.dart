@@ -139,13 +139,11 @@ class AppRestrictionProvider with ChangeNotifier {
       // 制限対象アプリリストを更新
       await _androidAppController.updateRestrictedApps(restrictedApps);
 
-      // 監視開始
-      final success = await _androidAppController.startMonitoring();
+      // サービスとして監視開始
+      print("Androidサービスとして監視を開始します");
+      final success = await _startAndroidMonitoringService();
       isMonitoring = success;
-      if (!success) {
-        print('監視の開始に失敗しました。権限を確認してください。');
-        return;
-      }
+      print("Android監視の開始結果: $success");
     }
 
     if (isMonitoring) {
@@ -161,11 +159,40 @@ class AppRestrictionProvider with ChangeNotifier {
     if (platformUtils.isWindows) {
       _windowsAppController.stopMonitoring();
     } else if (platformUtils.isAndroid) {
-      await _androidAppController.stopMonitoring();
+      await _stopAndroidMonitoringService();
     }
     isMonitoring = false;
     _saveMonitoringState(false); // 状態を保存
     notifyListeners();
+  }
+
+  // Android版のサービス起動・停止メソッドを追加
+  Future<bool> _startAndroidMonitoringService() async {
+    try {
+      print("AndroidサービスをアプリリストでStartします");
+      final restrictedPackageNames = restrictedApps
+          .where((app) => app.isRestricted && !app.isCurrentlyUnlocked)
+          .map((app) => app.executablePath)
+          .toList();
+      print("監視対象パッケージ: $restrictedPackageNames");
+
+      final result = await _androidAppController.startMonitoringService(
+        restrictedPackageNames,
+      );
+      print("サービス開始結果: $result");
+      return result;
+    } catch (e) {
+      print('Android監視サービス起動エラー: $e');
+      return false;
+    }
+  }
+
+  Future<void> _stopAndroidMonitoringService() async {
+    try {
+      await _androidAppController.stopMonitoringService();
+    } catch (e) {
+      print('Android監視サービス停止エラー: $e');
+    }
   }
 
   // 制限対象アプリを追加
@@ -392,6 +419,45 @@ class AppRestrictionProvider with ChangeNotifier {
       await _androidAppController.requestOverlayPermission();
     } catch (e) {
       print('オーバーレイ権限リクエストエラー: $e');
+    }
+  }
+
+  /// バッテリー最適化設定の確認と通知
+  Future<void> checkAndRequestBatteryOptimization(BuildContext context) async {
+    if (!PlatformUtils().isAndroid) return;
+
+    // 現在のバッテリー最適化状態を確認
+    final isIgnored =
+        await _androidAppController.isBatteryOptimizationIgnored();
+
+    if (!isIgnored && context.mounted) {
+      // まだ確認していない場合は確認ダイアログを表示
+      bool shouldOpenSettings = await showDialog<bool>(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text('バッテリー最適化の設定'),
+              content: const Text(
+                'アプリ制限機能を正常に動作させるには、バッテリー最適化を無効にすることをお勧めします。\n\n'
+                'これにより、アプリがバックグラウンドでも正常に動作するようになります。',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(false),
+                  child: const Text('後で行う'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.of(ctx).pop(true),
+                  child: const Text('設定を開く'),
+                ),
+              ],
+            ),
+          ) ??
+          false;
+
+      // ユーザーが「設定を開く」を選択した場合のみ設定画面に遷移
+      if (shouldOpenSettings && context.mounted) {
+        await _androidAppController.openBatteryOptimizationSettings();
+      }
     }
   }
 }

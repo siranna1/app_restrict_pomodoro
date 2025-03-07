@@ -168,6 +168,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         );
       }
       if (hasPermission) {
+        // バッテリー最適化設定の確認
+        appRestrictionProvider.checkAndRequestBatteryOptimization(context);
         // 監視開始
         appRestrictionProvider.startMonitoring();
         print('Androidアプリ監視を自動開始しました');
@@ -223,6 +225,24 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // アプリのライフサイクル状態が変わったときに呼ばれる
     // これにより、WidgetsBinding.instance.lifecycleState が更新される
+    super.didChangeAppLifecycleState(state);
+
+    if (state == AppLifecycleState.resumed) {
+      // アプリが再開されたときの処理
+      // 必要に応じて状態を復元
+      _restoreAppState();
+    }
+  }
+
+  void _restoreAppState() {
+    // 必要な状態の復元処理
+    final appRestrictionProvider =
+        Provider.of<AppRestrictionProvider>(context, listen: false);
+
+    // 監視が有効だった場合は再開
+    if (appRestrictionProvider.isMonitoring) {
+      appRestrictionProvider.startMonitoring();
+    }
   }
 
   @override
