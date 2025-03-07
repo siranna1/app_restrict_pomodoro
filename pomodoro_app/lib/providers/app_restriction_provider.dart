@@ -1,5 +1,6 @@
 // providers/app_restriction_provider.dart - アプリ制限管理のProvider
 import 'package:flutter/material.dart';
+import 'package:path/path.dart';
 import 'package:win32/win32.dart';
 import '../models/restricted_app.dart';
 import '../models/reward_point.dart';
@@ -9,6 +10,7 @@ import '../windows_app_controller.dart';
 import '../android_app_controller.dart';
 import '../utils/platform_utils.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:async';
 
 class AppRestrictionProvider with ChangeNotifier {
   final _windowsAppController = WindowsAppController();
@@ -19,6 +21,7 @@ class AppRestrictionProvider with ChangeNotifier {
   bool get needsPermissionGuide => _needsPermissionGuide;
   bool isMonitoring = false;
   List<RestrictedApp> restrictedApps = [];
+  Timer? _unlockExpirationTimer; //アプリ解除後の残り時間確認用タイマー
   // late を削除し、初期値を設定
   RewardPoint rewardPoints = RewardPoint(
     earnedPoints: 0,
@@ -37,12 +40,82 @@ class AppRestrictionProvider with ChangeNotifier {
 
   static AppRestrictionProvider? _instance;
 
+  @override
+  void dispose() {
+    _unlockExpirationTimer?.cancel();
+    super.dispose();
+  }
+
   AppRestrictionProvider() {
     _instance = this; // インスタンスを保存
     _initializeController();
     _loadRestrictedApps();
     _loadRewardPoints();
     _loadMonitoringState();
+    _checkUnlockExpirations();
+    _startUnlockExpirationChecker();
+  }
+
+  void _startUnlockExpirationChecker() {
+    // 既存のタイマーをキャンセル
+    _unlockExpirationTimer?.cancel();
+
+    // 60秒ごとに解除期限をチェック
+    _unlockExpirationTimer = Timer.periodic(Duration(seconds: 60), (_) {
+      _checkUnlockExpirations();
+    });
+  }
+
+  Future<void> _checkUnlockExpirations() async {
+    print("解除期限チェックを実行中...");
+    bool needsUpdate = false;
+    //RestrictedApp needUpdateApp = restrictedApps.first;
+    final now = DateTime.now();
+    final platformUtils = PlatformUtils();
+
+    // 解除期限が切れたアプリを確認
+    for (final app in restrictedApps) {
+      if (app.isCurrentlyUnlocked && app.currentSessionEnd != null) {
+        if (now.isAfter(app.currentSessionEnd!)) {
+          print("${app.name}の解除期限が切れました。制限を再開します。");
+
+          // アプリの解除状態をリセット
+          final updatedApp = app.copyWith(currentSessionEnd: null);
+          //needUpdateApp = updatedApp;
+          await DatabaseHelper.instance.updateRestrictedApp(updatedApp);
+
+          // 現在のインスタンスも更新
+          final index = restrictedApps.indexWhere((a) => a.id == app.id);
+          if (index >= 0) {
+            restrictedApps[index] = updatedApp;
+          }
+
+          needsUpdate = true;
+        }
+      }
+    }
+
+    // 変更があった場合のみ監視サービスを更新
+    if (needsUpdate) {
+      // サービスに制限リスト更新を通知
+      if (isMonitoring) {
+        if (platformUtils.isAndroid) {
+          // Android側のサービスに制限リスト更新を通知
+          await _updateAndroidMonitoringServiceAppList();
+        } else if (platformUtils.isWindows) {
+          // Windows側の監視に制限リスト更新を通知
+          await _windowsAppController.manualUpdatePomodoroCount();
+
+          // Windows用の追加更新処理（更新されたアプリリストを反映）
+          for (var app in restrictedApps) {
+            if (app.id != null) {
+              await _windowsAppController.updateRestrictedApp(app);
+            }
+          }
+        }
+      }
+      notifyListeners();
+    }
   }
 
   // 静的メソッドを追加
@@ -76,8 +149,44 @@ class AppRestrictionProvider with ChangeNotifier {
   Future<void> _loadRestrictedApps() async {
     final db = await DatabaseHelper.instance.database;
     final results = await db.query('restricted_apps');
-    restrictedApps = results.map((map) => RestrictedApp.fromMap(map)).toList();
+
+    // 現在時刻を取得
+    final now = DateTime.now();
+
+    // アプリごとに期限チェックしつつリストを作成
+    List<RestrictedApp> apps = [];
+    for (var map in results) {
+      final app = RestrictedApp.fromMap(map);
+
+      // 解除中だが期限切れの場合は制限状態に戻す
+      if (app.isCurrentlyUnlocked &&
+          app.currentSessionEnd != null &&
+          now.isAfter(app.currentSessionEnd!)) {
+        // 期限切れなので更新
+        final updatedApp = app.copyWith(currentSessionEnd: null);
+        await db.update(
+          'restricted_apps',
+          updatedApp.toMap(),
+          where: 'id = ?',
+          whereArgs: [app.id],
+        );
+
+        // 更新したアプリを追加
+        apps.add(updatedApp);
+        print("${app.name}の解除期限が切れていたため、制限状態に戻しました");
+      } else {
+        // 通常のアプリを追加
+        apps.add(app);
+      }
+    }
+
+    restrictedApps = apps;
     notifyListeners();
+
+    // サービスに最新の状態を通知
+    if (isMonitoring) {
+      await _updateAndroidMonitoringServiceAppList();
+    }
   }
 
   Future<void> _loadRewardPoints() async {
@@ -122,6 +231,8 @@ class AppRestrictionProvider with ChangeNotifier {
   // 監視を開始
   void startMonitoring() async {
     final platformUtils = PlatformUtils();
+    // 監視開始前に解除期限をチェック
+    await _checkUnlockExpirations();
 
     if (platformUtils.isWindows) {
       _windowsAppController.startMonitoring();
@@ -137,7 +248,8 @@ class AppRestrictionProvider with ChangeNotifier {
       }
 
       // 制限対象アプリリストを更新
-      await _androidAppController.updateRestrictedApps(restrictedApps);
+      //await _androidAppController.updateRestrictedApps(restrictedApps);
+      _updateAndroidMonitoringServiceAppList();
 
       // サービスとして監視開始
       print("Androidサービスとして監視を開始します");
@@ -184,6 +296,27 @@ class AppRestrictionProvider with ChangeNotifier {
     } catch (e) {
       print('Android監視サービス起動エラー: $e');
       return false;
+    }
+  }
+
+  // Android版のサービス更新メソッドを追加
+  Future<void> _updateAndroidMonitoringServiceAppList() async {
+    if (!PlatformUtils().isAndroid) return;
+
+    try {
+      // 現在制限対象になっているアプリのリストを取得（解除状態のものを除く）
+      //final restrictedPackageNames = restrictedApps
+      //    .where((app) => app.isRestricted && !app.isCurrentlyUnlocked)
+      //    .map((app) => app.executablePath)
+      //    .toList();
+//
+      //print("サービスに更新する監視対象パッケージ: $restrictedPackageNames");
+
+      // サービスに制限リスト更新を通知
+      //await _androidAppController.updateRestrictedApps(restrictedPackageNames);
+      await _androidAppController.updateRestrictedApps(restrictedApps);
+    } catch (e) {
+      print('Android監視対象アプリ更新エラー: $e');
     }
   }
 
@@ -252,13 +385,13 @@ class AppRestrictionProvider with ChangeNotifier {
           where: 'id = ?',
           whereArgs: [app.id],
         );
-
         // 更新成功後にリストを再読み込み
         await _loadRestrictedApps();
+
         // 監視中なら制限リストを更新
-        if (isMonitoring) {
-          await _androidAppController.updateRestrictedApps(restrictedApps);
-        }
+        //if (isMonitoring) {
+        await _updateAndroidMonitoringServiceAppList();
+        //}
       }
 
       print("アプリ更新完了: ${app.name}");
@@ -320,6 +453,15 @@ class AppRestrictionProvider with ChangeNotifier {
 
       // ポイント更新
       await _loadRewardPoints();
+
+      // プラットフォームを検出
+      final platformUtils = PlatformUtils();
+
+      // プラットフォームに応じて処理を分岐
+      if (platformUtils.isAndroid) {
+        print("Androidアプリ解除: ${app.name}");
+        await _updateAndroidMonitoringServiceAppList();
+      }
 
       return true;
     } catch (e) {

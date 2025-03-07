@@ -84,8 +84,12 @@ class AppMonitorService : Service() {
             "UPDATE_PACKAGES" -> {
                 val packages = intent.getStringArrayListExtra("packages")
                 if (packages != null) {
+                    println("制限パッケージリストを更新: $packages")
                     restrictedPackages = packages
                 }
+            }
+            else -> {
+                println("不明なコマンド: ${intent?.action}")
             }
         }
         
@@ -149,15 +153,19 @@ class AppMonitorService : Service() {
                 override fun run() {
                     try {
                         val currentApp = getCurrentForegroundApp()
+                        println("現在実行中のアプリ: $currentApp")
                         
                         if (currentApp != null && restrictedPackages.contains(currentApp)) {
-                            // メインスレッドでUIを操作
+                            println("制限対象アプリを検出: $currentApp")
+                            
+                            // UI通知用にメインスレッドで処理する
                             Handler(Looper.getMainLooper()).post {
                                 killApp(currentApp)
                             }
                         }
                     } catch (e: Exception) {
-                        println("監視中エラー: ${e.message}")
+                        println("アプリ監視中にエラー: ${e.message}")
+                        e.printStackTrace()
                     }
                 }
             }, 0, 3000) // 3秒ごとにチェック

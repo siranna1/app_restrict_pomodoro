@@ -44,40 +44,6 @@ class AndroidAppController {
     }
   }
 
-  /// 監視を開始
-  Future<bool> startMonitoring() async {
-    if (_isMonitoring) return true;
-
-    // 権限チェック
-    final hasPermission = await hasUsageStatsPermission();
-    if (!hasPermission) {
-      await openUsageStatsSettings();
-      return false;
-    }
-
-    try {
-      final result = await _channel.invokeMethod('startMonitoring');
-      _isMonitoring = result ?? false;
-      return _isMonitoring;
-    } catch (e) {
-      print('監視開始エラー: $e');
-      return false;
-    }
-  }
-
-  /// 監視を停止
-  Future<bool> stopMonitoring() async {
-    if (!_isMonitoring) return true;
-
-    try {
-      final result = await _channel.invokeMethod('stopMonitoring');
-      _isMonitoring = !(result ?? false);
-      return !_isMonitoring;
-    } catch (e) {
-      print('監視停止エラー: $e');
-      return false;
-    }
-  }
   // android_app_controller.dart に以下のメソッドを追加
 
   /// サービスとして監視を開始
@@ -121,6 +87,8 @@ class AndroidAppController {
           .where((app) => app.isRestricted && !app.isCurrentlyUnlocked)
           .map((app) => app.executablePath)
           .toList();
+
+      print("制限対象のアプリ: $_restrictedPackages");
 
       final result = await _channel.invokeMethod('updateRestrictedPackages', {
         'packages': _restrictedPackages,
