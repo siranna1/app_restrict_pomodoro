@@ -138,24 +138,23 @@ class AndroidAppController(
                 openBatteryOptimizationSettings()
                 result.success(true)
             }
-            "checkUnlockExpirations" -> {
-                println("期限切れチェックタイマーサービス開始")
-                val intent = Intent(context, AppMonitorService::class.java)
-                intent.action = "START_EXPIRATION_CHECKER"
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    println("startForegroundService を呼び出します")
-                    context.startForegroundService(intent)
+            "registerAppUnlock" -> {
+                val packageName = call.argument<String>("packageName")
+                val expiryTime = call.argument<Long>("expiryTime")
+
+                if (packageName != null && expiryTime != null) {
+                    val success = registerAppUnlock(packageName, expiryTime)
+                    result.success(success)
                 } else {
-                    println("startService を呼び出します")
-                    context.startService(intent)
+                    result.error("INVALID_ARGUMENT", "パッケージ名または期限が無効です", null)
                 }
-                result.success(true)
-            }
-            else -> {
-                result.notImplemented()
+            }else -> {
+            result.notImplemented()
             }
         }
+        
     }
+
     
     private fun hasUsageStatsPermission(): Boolean {
         val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
@@ -197,6 +196,31 @@ class AndroidAppController(
         } catch (e: Exception) {
             println("制限パッケージ更新エラー: ${e.message}")
             e.printStackTrace()
+            return false
+        }
+    }
+    fun registerAppUnlock(packageName: String, expiryTimeMillis: Long): Boolean {
+        try {
+            // Shared Preferencesに保存
+            val prefs = context.getSharedPreferences("app_unlock_prefs", Context.MODE_PRIVATE)
+            prefs.edit()
+                .putLong("unlock_expiry_$packageName", expiryTimeMillis)
+                .apply()
+
+            println("アプリ解除情報を保存しました: $packageName, 期限: ${Date(expiryTimeMillis)}")
+
+            // サービスにも通知
+            val intent = Intent(context, AppMonitorService::class.java)
+            intent.action = "UPDATE_UNLOCK_INFO"
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
+
+            return true
+        } catch (e: Exception) {
+            println("アプリ解除登録エラー: ${e.message}")
             return false
         }
     }
@@ -254,6 +278,7 @@ class AndroidAppController(
 
     fun startMonitoringService(packages: List<String>): Boolean {
         try {
+            if(isMonitoring) return false
             if (!hasUsageStatsPermission()) {
                 println("使用状況アクセス権限がありません - 監視開始できません")
                 return false

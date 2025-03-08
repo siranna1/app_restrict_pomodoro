@@ -53,7 +53,7 @@ class AppRestrictionProvider with ChangeNotifier {
     _loadRewardPoints();
     _loadMonitoringState();
     _checkUnlockExpirations();
-    _startUnlockExpirationChecker();
+    //_startUnlockExpirationChecker();
   }
 
   void _startUnlockExpirationChecker() {
@@ -414,8 +414,11 @@ class AppRestrictionProvider with ChangeNotifier {
 
       // プラットフォームに応じて処理を分岐
       if (platformUtils.isAndroid) {
-        print("Androidアプリ解除: ${app.name}");
-        await _updateAndroidMonitoringServiceAppList();
+        await _androidAppController.registerAppUnlock(
+          app.executablePath,
+          unlockUntil.millisecondsSinceEpoch,
+        );
+        print("Android側に解除情報を通知: ${app.name}, 期限: $unlockUntil");
       }
 
       return true;

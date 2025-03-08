@@ -196,6 +196,21 @@ class AndroidAppController {
     }
   }
 
+  // アプリ解除情報を登録
+  Future<bool> registerAppUnlock(
+      String packageName, int expiryTimeMillis) async {
+    try {
+      return await _channel.invokeMethod('registerAppUnlock', {
+            'packageName': packageName,
+            'expiryTime': expiryTimeMillis,
+          }) ??
+          false;
+    } catch (e) {
+      print('アプリ解除登録エラー: $e');
+      return false;
+    }
+  }
+
   /// 監視状態を取得
   bool get isMonitoring => _isMonitoring;
 }

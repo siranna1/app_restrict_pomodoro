@@ -34,7 +34,7 @@
         <receiver
             android:name=".ExpirationCheckReceiver"
             android:enabled="true"
-            android:exported="false">
+            android:exported="true">
             <intent-filter>
                 <action android:name="com.example.pomodoro_app.CHECK_EXPIRATIONS" />
             </intent-filter>

@@ -52,6 +52,8 @@ class AppMonitorService : Service() {
     private var overlayShownTimestamp: Long = 0
     private var lastRestrictedPackage: String? = null
     private var unlockExpirationsTimer: Timer? = null
+
+    private val unlockedApps = HashMap<String, Long>()
     
     // Binderの実装
     private val binder = LocalBinder()
@@ -91,6 +93,13 @@ class AppMonitorService : Service() {
             }
             "START_EXPIRATION_CHECKER" -> {
                 startUnlockExpirationChecker()
+            }
+            "CHECK_EXPIRATIONS_INTERNAL" -> {
+                // 直接チェックを実行
+                startUnlockExpirationChecker()
+            }
+            "UPDATE_UNLOCK_INFO" -> {
+                loadUnlockInfo()
             }
             else -> {
                 println("不明なコマンド: ${intent?.action}")
@@ -158,16 +167,46 @@ class AppMonitorService : Service() {
             scheduleAtFixedRate(object : TimerTask() {
                 override fun run() {
                     try {
+                        // for (app in restrictedPackages) {
+                        //     // 制限が無効な場合はスキップ
+                        //     if (!app.isRestricted) continue;
+                            
+                        //     // 現在のアプリが解除リストにあり、まだ期限内かチェック
+                        //     val packageName = app.executablePath  // または適切なフィールド
+                        //     val expiryTime = unlockedApps[packageName]
+                            
+                        //     if (expiryTime != null && System.currentTimeMillis() < expiryTime) {
+                        //         // まだ解除期間内なのでスキップ
+                        //         continue
+                        //     }
+                            
+                        //     // それ以外は通常通り制限チェック
+                        //     val isRunning = false // 一時的に無効化、後ほど適切な実装に置き換え
+                            
+                        //     if (isRunning) {
+                        //         // 制限中のアプリが実行されていれば終了
+                        //         //_terminateApplication(app.executablePath)
+                        //         //_showNotification(app)
+                        //     }
+                        // }
+                        
                         val currentApp = getCurrentForegroundApp()
                         println("現在実行中のアプリ: $currentApp")
-                        
+                        //解除制限をチェック
+                        checkUnlockExpirations()
                         if (currentApp != null && restrictedPackages.contains(currentApp)) {
-                            println("制限対象アプリを検出: $currentApp")
                             
-                            // UI通知用にメインスレッドで処理する
-                            Handler(Looper.getMainLooper()).post {
-                                killApp(currentApp)
-                            }
+                            //val expiryTime = unlockedApps[currentApp]
+                            
+                            //if (expiryTime == null || System.currentTimeMillis() > expiryTime) {
+                            //if(!unlockedApps.containsKey(currentApp)) {
+                                println("制限対象アプリを検出: $currentApp")
+
+                                // UI通知用にメインスレッドで処理する
+                                Handler(Looper.getMainLooper()).post {
+                                    killApp(currentApp)
+                                }
+                            //}
                         }
                     } catch (e: Exception) {
                         println("アプリ監視中にエラー: ${e.message}")
@@ -208,12 +247,58 @@ class AppMonitorService : Service() {
         }
         println("期限切れチェックタイマーを開始しました")
     }
-    // 期限切れをチェックするメソッド
+    // 期限切れチェックを修正
     private fun checkUnlockExpirations() {
-        // Flutterアプリに期限切れチェックを要求するブロードキャストを送信
-        val intent = Intent("com.example.pomodoro_app.CHECK_EXPIRATIONS")
-        sendBroadcast(intent)
-        println("期限切れチェックのブロードキャストを送信しました")
+        val now = System.currentTimeMillis()
+        val prefs = getSharedPreferences("app_unlock_prefs", Context.MODE_PRIVATE)
+        val editor = prefs.edit()
+        var hasChanged = false
+    
+      // 現在保持している解除情報をチェック
+        val expiredApps = ArrayList<String>()
+        for ((packageName, expiryTime) in unlockedApps) {
+            if (now > expiryTime) {
+                // 期限切れ
+                expiredApps.add(packageName)
+                editor.remove("unlock_expiry_$packageName")
+                hasChanged = true
+                println("アプリの解除期限切れ: $packageName")
+            }
+        }
+
+        // 期限切れのアプリを削除
+        for (packageName in expiredApps) {
+            unlockedApps.remove(packageName)
+            restrictedPackages = restrictedPackages + packageName
+        }
+
+        if (hasChanged) {
+          // 変更があれば保存
+            editor.apply()    
+          // Flutterアプリに通知（アプリが起動している場合のみ）
+            val intent = Intent("com.example.pomodoro_app.EXPIRATIONS_UPDATED")
+            intent.setPackage(packageName)
+            sendBroadcast(intent)
+        }
+    }
+
+    // 解除情報をロード
+    private fun loadUnlockInfo() {
+        val prefs = getSharedPreferences("app_unlock_prefs", Context.MODE_PRIVATE)
+        unlockedApps.clear()
+        
+        // すべてのキーを取得し、アンロック情報を探す
+        for (key in prefs.all.keys) {
+            if (key.startsWith("unlock_expiry_")) {
+                val packageName = key.substringAfter("unlock_expiry_")
+                val expiryTime = prefs.getLong(key, 0)
+        
+                if (expiryTime > 0) {
+                    unlockedApps[packageName] = expiryTime
+                    println("解除情報をロード: $packageName, 期限: ${Date(expiryTime)}")
+                }
+            }
+        }
     }
     
     private fun hasUsageStatsPermission(): Boolean {
