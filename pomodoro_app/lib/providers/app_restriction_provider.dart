@@ -56,7 +56,7 @@ class AppRestrictionProvider with ChangeNotifier {
     _loadMonitoringState();
     _checkUnlockExpirations();
     initializeBackgroundServices();
-    //_startUnlockExpirationChecker();
+    _startUnlockExpirationChecker();
   }
 
   void _startUnlockExpirationChecker() {
@@ -65,7 +65,8 @@ class AppRestrictionProvider with ChangeNotifier {
 
     // 60秒ごとに解除期限をチェック
     _unlockExpirationTimer = Timer.periodic(Duration(seconds: 60), (_) {
-      _checkUnlockExpirations();
+      //_checkUnlockExpirations();
+      notifyListeners();
     });
   }
 
@@ -456,6 +457,7 @@ class AppRestrictionProvider with ChangeNotifier {
         // }
       }
 
+      notifyListeners();
       return true;
     } catch (e) {
       print('アプリ解除中にエラーが発生: $e');

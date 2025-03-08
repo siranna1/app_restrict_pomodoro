@@ -145,129 +145,133 @@ class _AppStoreScreenState extends State<AppStoreScreen>
 class AppStoreTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    final appRestrictionProvider = Provider.of<AppRestrictionProvider>(context);
-    final restrictedApps = appRestrictionProvider.restrictedApps;
+    return Consumer<AppRestrictionProvider>(
+        builder: (context, appRestrictionProvider, child) {
+      final appRestrictionProvider =
+          Provider.of<AppRestrictionProvider>(context);
+      final restrictedApps = appRestrictionProvider.restrictedApps;
 
-    if (restrictedApps.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.apps_outlined, size: 64, color: Colors.grey[400]),
-            const SizedBox(height: 16),
-            Text(
-              '制限アプリがありません',
-              style: TextStyle(fontSize: 18, color: Colors.grey[600]),
-            ),
-            const SizedBox(height: 8),
-            ElevatedButton.icon(
-              icon: const Icon(Icons.add),
-              label: const Text('アプリを追加'),
-              onPressed: () {
-                // Androidかどうかをチェック
-                if (Theme.of(context).platform == TargetPlatform.android) {
-                  // Android用のアプリ選択画面に遷移
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (context) => const AndroidAppSelectionScreen(),
-                    ),
-                  );
-                } else {
-                  // 既存のダイアログを表示（Windows用）
-                  _showAddAppDialog(context);
-                }
-              },
-            ),
-          ],
-        ),
-      );
-    }
-
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: restrictedApps.length,
-      itemBuilder: (context, index) {
-        final app = restrictedApps[index];
-        final isUnlocked = app.isCurrentlyUnlocked;
-
-        return Card(
-          elevation: 2,
-          margin: const EdgeInsets.only(bottom: 16),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    CircleAvatar(
-                      backgroundColor: isUnlocked ? Colors.green : Colors.red,
-                      child: Icon(
-                        isUnlocked ? Icons.lock_open : Icons.lock,
-                        color: Colors.white,
+      if (restrictedApps.isEmpty) {
+        return Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.apps_outlined, size: 64, color: Colors.grey[400]),
+              const SizedBox(height: 16),
+              Text(
+                '制限アプリがありません',
+                style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+              ),
+              const SizedBox(height: 8),
+              ElevatedButton.icon(
+                icon: const Icon(Icons.add),
+                label: const Text('アプリを追加'),
+                onPressed: () {
+                  // Androidかどうかをチェック
+                  if (Theme.of(context).platform == TargetPlatform.android) {
+                    // Android用のアプリ選択画面に遷移
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => const AndroidAppSelectionScreen(),
                       ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            app.name,
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          Text(
-                            isUnlocked
-                                ? '残り${app.remainingMinutes}分間使用可能'
-                                : '制限中',
-                            style: TextStyle(
-                              color: isUnlocked ? Colors.green : Colors.red,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Switch(
-                      value: app.isRestricted,
-                      onChanged: (value) {
-                        appRestrictionProvider.updateRestrictedApp(
-                          app.copyWith(isRestricted: value),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                const Divider(),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('1ポイント = ${app.minutesPerPoint}分'),
-                          //Text('1時間 = ${app.pointCostPerHour}ポイント'),
-                        ],
-                      ),
-                    ),
-                    if (!isUnlocked)
-                      ElevatedButton.icon(
-                        icon: Icon(Icons.shopping_cart),
-                        label: Text('解除する'),
-                        onPressed: () => _showUnlockDialog(context, app),
-                      ),
-                  ],
-                ),
-              ],
-            ),
+                    );
+                  } else {
+                    // 既存のダイアログを表示（Windows用）
+                    _showAddAppDialog(context);
+                  }
+                },
+              ),
+            ],
           ),
         );
-      },
-    );
+      }
+
+      return ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: restrictedApps.length,
+        itemBuilder: (context, index) {
+          final app = restrictedApps[index];
+          final isUnlocked = app.isCurrentlyUnlocked;
+
+          return Card(
+            elevation: 2,
+            margin: const EdgeInsets.only(bottom: 16),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        backgroundColor: isUnlocked ? Colors.green : Colors.red,
+                        child: Icon(
+                          isUnlocked ? Icons.lock_open : Icons.lock,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              app.name,
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Text(
+                              isUnlocked
+                                  ? '残り${app.remainingMinutes}分間使用可能'
+                                  : '制限中',
+                              style: TextStyle(
+                                color: isUnlocked ? Colors.green : Colors.red,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Switch(
+                        value: app.isRestricted,
+                        onChanged: (value) {
+                          appRestrictionProvider.updateRestrictedApp(
+                            app.copyWith(isRestricted: value),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  const Divider(),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('1ポイント = ${app.minutesPerPoint}分'),
+                            //Text('1時間 = ${app.pointCostPerHour}ポイント'),
+                          ],
+                        ),
+                      ),
+                      if (!isUnlocked)
+                        ElevatedButton.icon(
+                          icon: Icon(Icons.shopping_cart),
+                          label: Text('解除する'),
+                          onPressed: () => _showUnlockDialog(context, app),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    });
   }
 
   // アプリ追加ダイアログ
