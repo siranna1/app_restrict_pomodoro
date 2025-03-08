@@ -21,9 +21,37 @@ import 'services/settings_service.dart';
 //import 'package:uni_links/uni_links.dart';
 import 'package:app_links/app_links.dart';
 import 'dart:io';
+import 'platforms/android/android_app_controller.dart';
+import 'package:window_manager/window_manager.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Windowsの場合、バックグラウンドサービスを初期化
+  if (Platform.isWindows) {
+    WidgetsFlutterBinding.ensureInitialized();
+    // Windowsの場合、windowManagerを初期化
+    if (Platform.isWindows) {
+      await windowManager.ensureInitialized();
+
+      // ウィンドウの挙動を設定
+      WindowOptions windowOptions = const WindowOptions(
+        size: Size(800, 600),
+        center: true,
+        title: 'ポモドーロ学習管理',
+        minimumSize: Size(400, 300),
+        // 閉じるボタンをクリックしてもプロセスを終了しない
+        skipTaskbar: false,
+      );
+
+      await windowManager.waitUntilReadyToShow(windowOptions, () async {
+        await windowManager.show();
+        await windowManager.focus();
+      });
+    }
+  }
+
+  AndroidAppController.staticInitialize();
+
   // 設定サービスを初期化
   final settingsService = SettingsService();
   await settingsService.init();
@@ -49,7 +77,7 @@ void main() async {
 
   // バックグラウンドサービスの初期化
   if (platformService.supportsBackgroundExecution) {
-    await BackgroundService().initialize();
+    //await BackgroundService().initialize();
   }
 
   runApp(
@@ -105,7 +133,8 @@ class MainScreen extends StatefulWidget {
   _MainScreenState createState() => _MainScreenState();
 }
 
-class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
+class _MainScreenState extends State<MainScreen>
+    with WidgetsBindingObserver, WindowListener {
   int _selectedIndex = 0;
   final AppLinks _appLinks = AppLinks();
 
@@ -128,6 +157,14 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _startMonitoringIfAndroid();
     });
+    WidgetsBinding.instance.addObserver(this);
+
+    // Windowsの場合、閉じるボタンのイベントをリッスン
+    if (Platform.isWindows) {
+      windowManager.addListener(this);
+      // デフォルトの挙動を防止（アプリを終了させない）
+      windowManager.setPreventClose(true);
+    }
   }
 
   // Android向けの自動監視開始
@@ -168,6 +205,8 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         );
       }
       if (hasPermission) {
+        // バッテリー最適化設定の確認
+        appRestrictionProvider.checkAndRequestBatteryOptimization(context);
         // 監視開始
         appRestrictionProvider.startMonitoring();
         print('Androidアプリ監視を自動開始しました');
@@ -216,13 +255,57 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    if (Platform.isWindows) {
+      windowManager.removeListener(this);
+    }
+    final appRestrictionProvider =
+        Provider.of<AppRestrictionProvider>(context, listen: false);
+    appRestrictionProvider.prepareForAppClosure();
+
+    print("おわり");
     super.dispose();
+  }
+
+  @override
+  void onWindowClose() async {
+    print("ウィンドウが閉じられました");
+
+    // ウィンドウを非表示にするだけで終了しない
+    await windowManager.hide();
+
+    // デフォルトの挙動を防止（アプリを終了させない）
+    await windowManager.setPreventClose(true);
+
+    // 閉じるボタンが押されたときの処理
+    final appRestrictionProvider =
+        Provider.of<AppRestrictionProvider>(context, listen: false);
+
+    // バックグラウンドサービスを準備
+    await appRestrictionProvider.prepareForAppClosure();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // アプリのライフサイクル状態が変わったときに呼ばれる
     // これにより、WidgetsBinding.instance.lifecycleState が更新される
+    super.didChangeAppLifecycleState(state);
+
+    if (state == AppLifecycleState.resumed) {
+      // アプリが再開されたときの処理
+      // 必要に応じて状態を復元
+      _restoreAppState();
+    }
+  }
+
+  void _restoreAppState() {
+    // 必要な状態の復元処理
+    final appRestrictionProvider =
+        Provider.of<AppRestrictionProvider>(context, listen: false);
+
+    // 監視が有効だった場合は再開
+    if (appRestrictionProvider.isMonitoring) {
+      appRestrictionProvider.startMonitoring();
+    }
   }
 
   @override

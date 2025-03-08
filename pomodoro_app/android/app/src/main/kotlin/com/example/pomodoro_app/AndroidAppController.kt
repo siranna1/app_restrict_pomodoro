@@ -36,6 +36,8 @@ import android.widget.Button
 import android.widget.TextView
 import android.view.View
 import android.view.MotionEvent
+import android.os.PowerManager
+
 class AndroidAppController(
     private val context: Context,
     private val activity: Activity
@@ -70,14 +72,6 @@ class AndroidAppController(
             }
             "openUsageStatsSettings" -> {
                 openUsageStatsSettings()
-                result.success(true)
-            }
-            "startMonitoring" -> {
-                startMonitoring()
-                result.success(true)
-            }
-            "stopMonitoring" -> {
-                stopMonitoring()
                 result.success(true)
             }
             "updateRestrictedPackages" -> {
@@ -119,11 +113,48 @@ class AndroidAppController(
                 context.startActivity(intent)
                 result.success(true)
             }
-            else -> {
-                result.notImplemented()
+            "startMonitoringService" -> {
+                
+                val packages = call.argument<List<String>>("packages")
+                if (packages != null) {
+                    val success = startMonitoringService(packages)
+                    result.success(success)
+                } else {
+                    result.error("INVALID_ARGUMENT", "パッケージリストが提供されていません", null)
+                }
+            }
+            "stopMonitoringService" -> {
+                val success = stopMonitoringService()
+                result.success(success)
+            }
+            "isServiceRunning" -> {
+                val isRunning = isServiceRunning()
+                result.success(isRunning)
+            }
+            "checkBatteryOptimization" -> {
+                result.success(isBatteryOptimizationIgnored())
+            }
+            "openBatteryOptimizationSettings" -> {
+                openBatteryOptimizationSettings()
+                result.success(true)
+            }
+            "registerAppUnlock" -> {
+                val packageName = call.argument<String>("packageName")
+                val expiryTime = call.argument<Long>("expiryTime")
+
+                if (packageName != null && expiryTime != null) {
+                    val success = registerAppUnlock(packageName, expiryTime)
+                    result.success(success)
+                } else {
+                    result.error("INVALID_ARGUMENT", "パッケージ名または期限が無効です", null)
+                }
+            }else -> {
+            result.notImplemented()
             }
         }
+        
     }
+
     
     private fun hasUsageStatsPermission(): Boolean {
         val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
@@ -139,11 +170,62 @@ class AndroidAppController(
         val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
         activity.startActivity(intent)
     }
-    
-    private fun updateRestrictedPackages(packages: List<String>) {
-        this.restrictedPackages = packages
+
+    // 制限対象アプリのリストを更新
+    fun updateRestrictedPackages(packages: List<String>): Boolean {
+        try {
+            println("AndroidAppController: 制限パッケージリストを更新します: $packages")
+
+            // メンバー変数を更新
+            restrictedPackages = packages
+            // 監視中ならサービスにも通知
+            if (isMonitoring) {
+                val intent = Intent(context, AppMonitorService::class.java)
+                intent.action = "UPDATE_PACKAGES"
+                intent.putStringArrayListExtra("packages", ArrayList(packages))
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    context.startForegroundService(intent)
+                } else {
+                    context.startService(intent)
+                }
+                println("サービスに制限パッケージ更新通知を送信しました")
+            }
+
+            return true
+        } catch (e: Exception) {
+            println("制限パッケージ更新エラー: ${e.message}")
+            e.printStackTrace()
+            return false
+        }
+    }
+    fun registerAppUnlock(packageName: String, expiryTimeMillis: Long): Boolean {
+        try {
+            // Shared Preferencesに保存
+            val prefs = context.getSharedPreferences("app_unlock_prefs", Context.MODE_PRIVATE)
+            prefs.edit()
+                .putLong("unlock_expiry_$packageName", expiryTimeMillis)
+                .apply()
+
+            println("アプリ解除情報を保存しました: $packageName, 期限: ${Date(expiryTimeMillis)}")
+
+            // サービスにも通知
+            val intent = Intent(context, AppMonitorService::class.java)
+            intent.action = "UPDATE_UNLOCK_INFO"
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
+
+            return true
+        } catch (e: Exception) {
+            println("アプリ解除登録エラー: ${e.message}")
+            return false
+        }
     }
     
+    //現在startmonitoringSeriveceを使用しているため、こちらは使用されていない
     private fun startMonitoring() {
         if (isMonitoring) return
         println("Android監視サービス開始を試みます")
@@ -191,6 +273,109 @@ class AndroidAppController(
         monitorTimer = null
         isMonitoring = false
     }
+
+    // サービス関連メソッドの追加
+
+    fun startMonitoringService(packages: List<String>): Boolean {
+        try {
+            if(isMonitoring) return false
+            if (!hasUsageStatsPermission()) {
+                println("使用状況アクセス権限がありません - 監視開始できません")
+                return false
+            }
+            println("サービス起動を開始します。パッケージ数: ${packages.size}")
+            val intent = Intent(context, AppMonitorService::class.java)
+            intent.action = "START_MONITORING"
+            intent.putStringArrayListExtra("packages", ArrayList(packages))
+            
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                println("startForegroundService を呼び出します")
+                context.startForegroundService(intent)
+            } else {
+                println("startService を呼び出します")
+                context.startService(intent)
+            }
+
+            isMonitoring = true
+
+            println("サービス起動が成功しました")
+            return true
+        } catch (e: Exception) {
+            println("サービス起動エラー: ${e.message}")
+            e.printStackTrace()
+            return false
+        }
+    }
+    fun stopMonitoringService(): Boolean {
+        try {
+            val intent = Intent(context, AppMonitorService::class.java)
+            intent.action = "STOP_MONITORING"
+            context.startService(intent)
+
+            isMonitoring = false
+
+            return true
+        } catch (e: Exception) {
+            println("サービス停止エラー: ${e.message}")
+            return false
+        }
+    }
+    // サービス状態確認メソッドの実装
+    fun isServiceRunning(): Boolean {
+        val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        for (service in manager.getRunningServices(Integer.MAX_VALUE)) {
+            if (AppMonitorService::class.java.name == service.service.className) {
+                return true
+            }
+        }
+        return false
+    }
+
+    private fun requestIgnoreBatteryOptimization() {
+        // 何もしない - 設定画面への自動遷移を停止
+        // ユーザーがダイアログで「設定を開く」を選択した場合のみ設定画面を開く
+
+        //try {
+        //    val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+        //    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
+        //        !powerManager.isIgnoringBatteryOptimizations(context.packageName)) {
+        //        
+        //        val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+        //        intent.data = Uri.parse("package:${context.packageName}")
+        //        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        //        context.startActivity(intent)
+        //    }
+        //} catch (e: Exception) {
+        //    println("バッテリー最適化除外リクエストエラー: ${e.message}")
+        //}
+    }
+
+    // バッテリー最適化の状態をチェック
+    fun isBatteryOptimizationIgnored(): Boolean {
+        try {
+            val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+            return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                powerManager.isIgnoringBatteryOptimizations(context.packageName)
+            } else {
+                true // Android M未満ではこの設定は不要
+            }
+        } catch (e: Exception) {
+            println("バッテリー最適化状態チェックエラー: ${e.message}")
+            return false
+        }
+    }
+
+    // バッテリー最適化設定画面を開く
+    fun openBatteryOptimizationSettings() {
+        try {
+            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+            intent.data = Uri.parse("package:${context.packageName}")
+            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            println("バッテリー最適化設定画面オープンエラー: ${e.message}")
+        }
+    }
     
     private fun killApp(packageName: String) {
         try {
@@ -198,7 +383,7 @@ class AndroidAppController(
             // オーバーレイダイアログを表示
             showOverlayRestrictionDialog(packageName)
             val am = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-            am.killBackgroundProcesses(packageName)
+            //am.killBackgroundProcesses(packageName)
             println("アプリ $packageName を終了させました")
         } catch (e: Exception) {
             println("アプリの終了エラー: ${e.message}")

@@ -1,7 +1,8 @@
 // lib/android_app_controller.dart
 import 'package:flutter/services.dart';
 import 'dart:async';
-import './models/restricted_app.dart';
+import '../../models/restricted_app.dart';
+import '../../providers/app_restriction_provider.dart';
 
 class AndroidAppController {
   static const MethodChannel _channel =
@@ -14,6 +15,23 @@ class AndroidAppController {
       AndroidAppController._internal();
   factory AndroidAppController() => _instance;
   AndroidAppController._internal();
+
+  static void staticInitialize() {
+    _channel.setMethodCallHandler(_methodCallHandler);
+  }
+
+  // メソッドコールハンドラー
+  static Future<dynamic> _methodCallHandler(MethodCall call) async {
+    switch (call.method) {
+      case 'checkUnlockExpirations':
+        return await AppRestrictionProvider.checkExpirations();
+      default:
+        throw PlatformException(
+          code: 'Unimplemented',
+          details: 'Method ${call.method} not implemented',
+        );
+    }
+  }
 
   /// 初期化処理
   Future<bool> initialize() async {
@@ -44,37 +62,38 @@ class AndroidAppController {
     }
   }
 
-  /// 監視を開始
-  Future<bool> startMonitoring() async {
-    if (_isMonitoring) return true;
+  // android_app_controller.dart に以下のメソッドを追加
 
-    // 権限チェック
-    final hasPermission = await hasUsageStatsPermission();
-    if (!hasPermission) {
-      await openUsageStatsSettings();
-      return false;
-    }
-
+  /// サービスとして監視を開始
+  Future<bool> startMonitoringService(List<String> packages) async {
+    print('startMonitoringService: $packages');
     try {
-      final result = await _channel.invokeMethod('startMonitoring');
-      _isMonitoring = result ?? false;
-      return _isMonitoring;
+      return await _channel.invokeMethod('startMonitoringService', {
+            'packages': packages,
+          }) ??
+          false;
     } catch (e) {
-      print('監視開始エラー: $e');
+      print('サービス起動エラー: $e');
       return false;
     }
   }
 
-  /// 監視を停止
-  Future<bool> stopMonitoring() async {
-    if (!_isMonitoring) return true;
-
+  /// サービスを停止
+  Future<bool> stopMonitoringService() async {
     try {
-      final result = await _channel.invokeMethod('stopMonitoring');
-      _isMonitoring = !(result ?? false);
-      return !_isMonitoring;
+      return await _channel.invokeMethod('stopMonitoringService') ?? false;
     } catch (e) {
-      print('監視停止エラー: $e');
+      print('サービス停止エラー: $e');
+      return false;
+    }
+  }
+
+  /// サービスが実行中かどうかを確認
+  Future<bool> isServiceRunning() async {
+    try {
+      return await _channel.invokeMethod('isServiceRunning') ?? false;
+    } catch (e) {
+      print('サービス状態確認エラー: $e');
       return false;
     }
   }
@@ -86,6 +105,8 @@ class AndroidAppController {
           .where((app) => app.isRestricted && !app.isCurrentlyUnlocked)
           .map((app) => app.executablePath)
           .toList();
+
+      print("制限対象のアプリ: $_restrictedPackages");
 
       final result = await _channel.invokeMethod('updateRestrictedPackages', {
         'packages': _restrictedPackages,
@@ -153,6 +174,40 @@ class AndroidAppController {
       await _channel.invokeMethod('requestOverlayPermission');
     } catch (e) {
       print('オーバーレイ権限リクエストエラー: $e');
+    }
+  }
+
+  /// バッテリー最適化が無効になっているか確認
+  Future<bool> isBatteryOptimizationIgnored() async {
+    try {
+      return await _channel.invokeMethod('checkBatteryOptimization') ?? false;
+    } catch (e) {
+      print('バッテリー最適化状態確認エラー: $e');
+      return false;
+    }
+  }
+
+  /// バッテリー最適化設定画面を開く
+  Future<void> openBatteryOptimizationSettings() async {
+    try {
+      await _channel.invokeMethod('openBatteryOptimizationSettings');
+    } catch (e) {
+      print('バッテリー最適化設定画面オープンエラー: $e');
+    }
+  }
+
+  // アプリ解除情報を登録
+  Future<bool> registerAppUnlock(
+      String packageName, int expiryTimeMillis) async {
+    try {
+      return await _channel.invokeMethod('registerAppUnlock', {
+            'packageName': packageName,
+            'expiryTime': expiryTimeMillis,
+          }) ??
+          false;
+    } catch (e) {
+      print('アプリ解除登録エラー: $e');
+      return false;
     }
   }
 

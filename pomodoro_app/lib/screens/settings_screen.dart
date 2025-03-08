@@ -1,4 +1,6 @@
 // screens/settings_screen.dart - 設定画面
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/pomodoro_provider.dart';
@@ -309,6 +311,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             ),
           ),
+
+          const Divider(),
+
+          // 通知と音設定
+          _buildSectionHeader(context, '権限'),
+          if (Platform.isAndroid)
+            ListTile(
+              title: const Text('バッテリー最適化の設定'),
+              subtitle: const Text('制限機能のバックグラウンド動作を改善します'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Provider.of<AppRestrictionProvider>(context, listen: false)
+                    .checkAndRequestBatteryOptimization(context);
+              },
+            ),
 
           const Divider(),
 
