@@ -21,10 +21,62 @@ import 'services/settings_service.dart';
 //import 'package:uni_links/uni_links.dart';
 import 'package:app_links/app_links.dart';
 import 'dart:io';
-import 'android_app_controller.dart';
+import 'platforms/android/android_app_controller.dart';
+import './services/windows_background/windows_background_service.dart';
+import 'package:window_manager/window_manager.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // コマンドライン引数を取得
+  final List<String> arguments =
+      Platform.environment.containsKey('FLUTTER_TEST')
+          ? [] // テスト環境では空リストを使用
+          : Platform.executableArguments;
+  // Windowsの場合、バックグラウンドサービスを初期化
+  if (Platform.isWindows) {
+    WidgetsFlutterBinding.ensureInitialized();
+    // Windowsの場合、windowManagerを初期化
+    if (Platform.isWindows) {
+      await windowManager.ensureInitialized();
+
+      // ウィンドウの挙動を設定
+      WindowOptions windowOptions = const WindowOptions(
+        size: Size(800, 600),
+        center: true,
+        title: 'ポモドーロ学習管理',
+        minimumSize: Size(400, 300),
+        // 閉じるボタンをクリックしてもプロセスを終了しない
+        skipTaskbar: false,
+      );
+
+      await windowManager.waitUntilReadyToShow(windowOptions, () async {
+        await windowManager.show();
+        await windowManager.focus();
+      });
+    }
+    // 適切なモードで起動するか確認
+    final shouldContinue =
+        await WindowsBackgroundService.launchInAppropriateMode();
+    if (!shouldContinue) {
+      // すでにバックグラウンドで実行中の場合は通知して終了
+      // ここでシステムトレイ通知などを表示することも可能
+      print('ポモドーロアプリはすでにバックグラウンドで実行中です');
+      exit(0);
+    }
+
+    // バックグラウンドサービスモードで起動された場合
+    if (arguments.contains('--minimized') ||
+        arguments.contains('--autostart')) {
+      await WindowsBackgroundService.runAsBackgroundService(arguments);
+      // バックグラウンドサービスモードの場合は、UIを表示せずに終了
+      if (arguments.contains('--service-only')) {
+        exit(0);
+      }
+    } else {
+      // 通常モードの場合はサービスを初期化
+      await WindowsBackgroundService().initialize(arguments: arguments);
+    }
+  }
 
   AndroidAppController.staticInitialize();
 
@@ -53,7 +105,7 @@ void main() async {
 
   // バックグラウンドサービスの初期化
   if (platformService.supportsBackgroundExecution) {
-    await BackgroundService().initialize();
+    //await BackgroundService().initialize();
   }
 
   runApp(
@@ -109,7 +161,8 @@ class MainScreen extends StatefulWidget {
   _MainScreenState createState() => _MainScreenState();
 }
 
-class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
+class _MainScreenState extends State<MainScreen>
+    with WidgetsBindingObserver, WindowListener {
   int _selectedIndex = 0;
   final AppLinks _appLinks = AppLinks();
 
@@ -132,6 +185,12 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _startMonitoringIfAndroid();
     });
+    WidgetsBinding.instance.addObserver(this);
+
+    // Windowsの場合、閉じるボタンのイベントをリッスン
+    if (Platform.isWindows) {
+      windowManager.addListener(this);
+    }
   }
 
   // Android向けの自動監視開始
@@ -222,7 +281,32 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    if (Platform.isWindows) {
+      windowManager.removeListener(this);
+    }
+    final appRestrictionProvider =
+        Provider.of<AppRestrictionProvider>(context, listen: false);
+    appRestrictionProvider.prepareForAppClosure();
+
+    print("おわり");
     super.dispose();
+  }
+
+  @override
+  void onWindowClose() async {
+    print("ウィンドウが閉じられました");
+    // 閉じるボタンが押されたときの処理
+    final appRestrictionProvider =
+        Provider.of<AppRestrictionProvider>(context, listen: false);
+
+    // バックグラウンドサービスを準備
+    await appRestrictionProvider.prepareForAppClosure();
+
+    // ウィンドウを非表示にするだけで終了しない
+    await windowManager.hide();
+
+    // デフォルトの挙動を防止（アプリを終了させない）
+    await windowManager.setPreventClose(true);
   }
 
   @override

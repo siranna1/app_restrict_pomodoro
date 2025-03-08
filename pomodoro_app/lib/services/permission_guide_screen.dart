@@ -1,6 +1,6 @@
 // lib/screens/permission_guide_screen.dart
 import 'package:flutter/material.dart';
-import '../android_app_controller.dart';
+import '../platforms/android/android_app_controller.dart';
 
 class PermissionGuideScreen extends StatelessWidget {
   final VoidCallback onPermissionGranted;

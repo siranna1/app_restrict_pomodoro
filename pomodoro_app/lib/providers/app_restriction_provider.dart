@@ -6,11 +6,15 @@ import '../models/restricted_app.dart';
 import '../models/reward_point.dart';
 import '../models/app_usage_session.dart';
 import '../services/database_helper.dart';
-import '../windows_app_controller.dart';
-import '../android_app_controller.dart';
+import '../platforms/windows/windows_app_controller.dart';
+import '../platforms/android/android_app_controller.dart';
 import '../utils/platform_utils.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
+import '../services/windows_background/windows_app_controller_enhanced.dart'
+    as enhanced;
+import '../services/windows_background/windows_background_service.dart';
+import 'dart:io';
 
 class AppRestrictionProvider with ChangeNotifier {
   final _windowsAppController = WindowsAppController();
@@ -53,6 +57,7 @@ class AppRestrictionProvider with ChangeNotifier {
     _loadRewardPoints();
     _loadMonitoringState();
     _checkUnlockExpirations();
+    initializeBackgroundServices();
     //_startUnlockExpirationChecker();
   }
 
@@ -98,6 +103,25 @@ class AppRestrictionProvider with ChangeNotifier {
       }
     } else {
       print("未サポートのプラットフォームです。");
+    }
+  }
+
+  // windows用のバックグラウンドサービスを初期化
+  Future<void> initializeBackgroundServices() async {
+    final platformUtils = PlatformUtils();
+
+    if (platformUtils.isWindows) {
+      // バックグラウンドサービスを初期化
+      await WindowsBackgroundService()
+          .initialize(arguments: Platform.executableArguments);
+
+      // 設定に基づいて監視状態を復元
+      final prefs = await SharedPreferences.getInstance();
+      final shouldMonitor = prefs.getBool('app_monitoring_enabled') ?? false;
+
+      if (shouldMonitor && !isMonitoring) {
+        startMonitoring();
+      }
     }
   }
 
@@ -190,7 +214,14 @@ class AppRestrictionProvider with ChangeNotifier {
     await _checkUnlockExpirations();
 
     if (platformUtils.isWindows) {
-      _windowsAppController.startMonitoring();
+      if (platformUtils.isWindows) {
+        // 通常のコントローラは互換性のために残しつつ、
+        // 強化されたコントローラも起動
+        _windowsAppController.startMonitoring();
+        enhanced.WindowsAppController().startMonitoring();
+      } else {
+        _windowsAppController.startMonitoring();
+      }
       isMonitoring = true;
     } else if (platformUtils.isAndroid) {
       // 権限チェック
@@ -225,6 +256,9 @@ class AppRestrictionProvider with ChangeNotifier {
 
     if (platformUtils.isWindows) {
       _windowsAppController.stopMonitoring();
+      if (platformUtils.isWindows) {
+        enhanced.WindowsAppController().stopMonitoring();
+      }
     } else if (platformUtils.isAndroid) {
       await _stopAndroidMonitoringService();
     }
@@ -419,6 +453,13 @@ class AppRestrictionProvider with ChangeNotifier {
           unlockUntil.millisecondsSinceEpoch,
         );
         print("Android側に解除情報を通知: ${app.name}, 期限: $unlockUntil");
+      } else if (platformUtils.isWindows) {
+        try {
+          await WindowsBackgroundService().updateAppUnlockInfo(restrictedApps);
+          print("Windows側バックグラウンドサービスに解除情報を通知: ${app.name}, 期限: $unlockUntil");
+        } catch (e) {
+          print('Windowsバックグラウンドサービス通知エラー: $e');
+        }
       }
 
       return true;
@@ -668,6 +709,34 @@ class AppRestrictionProvider with ChangeNotifier {
       // ユーザーが「設定を開く」を選択した場合のみ設定画面に遷移
       if (shouldOpenSettings && context.mounted) {
         await _androidAppController.openBatteryOptimizationSettings();
+      }
+    }
+  }
+
+  Future<void> prepareForAppClosure() async {
+    final platformUtils = PlatformUtils();
+
+    print("アプリ終了前のバックグラウンドサービス設定を開始します");
+    if (platformUtils.isWindows && Platform.isWindows) {
+      // アプリが閉じられてもバックグラウンドサービスが継続するよう設定
+      // 監視中であればバックグラウンドサービスを有効化
+      if (isMonitoring) {
+        try {
+          // バックグラウンドサービスを有効化
+          await WindowsBackgroundService().updateSettings(
+            serviceEnabled: true,
+          );
+
+          // *** 追加部分: 最新のアプリ解除情報を通知 ***
+          //await WindowsBackgroundService().updateAppUnlockInfo(restrictedApps);
+
+          // 監視状態を確実に保存
+          await _saveMonitoringState(true);
+
+          print("アプリ終了前にバックグラウンドサービスに最新状態を通知しました");
+        } catch (e) {
+          print('アプリ終了前のバックグラウンド設定エラー: $e');
+        }
       }
     }
   }

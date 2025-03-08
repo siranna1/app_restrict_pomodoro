@@ -3,8 +3,8 @@ import 'dart:ffi';
 import 'dart:io';
 import 'package:ffi/ffi.dart';
 import 'package:win32/win32.dart';
-import 'models/restricted_app.dart';
-import 'services/database_helper.dart';
+import '../../models/restricted_app.dart';
+import '../../services/database_helper.dart';
 
 class WindowsAppController {
   static final WindowsAppController _instance =
@@ -296,6 +296,117 @@ class WindowsAppController {
     print("WindowsAppController.manualUpdatePomodoroCount が呼ばれました");
     await _loadCompletedPomodorosToday();
     print("更新後のポモドーロカウント: $_completedPomodorosToday");
+  }
+
+  // 自動起動の設定
+  Future<bool> setAutoStart(bool enabled) async {
+    if (!Platform.isWindows) return false;
+
+    try {
+      final appPath = Platform.resolvedExecutable;
+
+      final keyPath = 'Software\\Microsoft\\Windows\\CurrentVersion\\Run';
+      final valueName = 'PomodoroApp';
+
+      // レジストリキーを開く
+      final hKey = calloc<HKEY>();
+      final result = RegOpenKeyEx(
+        HKEY_CURRENT_USER,
+        TEXT(keyPath),
+        0,
+        KEY_SET_VALUE | KEY_QUERY_VALUE,
+        hKey,
+      );
+
+      if (result != ERROR_SUCCESS) {
+        free(hKey);
+        return false;
+      }
+
+      if (enabled) {
+        // 自動起動設定を追加
+        final pathPointer = TEXT('$appPath --start-minimized');
+        final valueSize = pathPointer.length * 2;
+
+        final regSetResult = RegSetValueEx(
+          hKey.value,
+          TEXT(valueName),
+          0,
+          REG_SZ,
+          pathPointer.cast<Uint8>(),
+          valueSize,
+        );
+
+        free(pathPointer);
+        RegCloseKey(hKey.value);
+        free(hKey);
+
+        return regSetResult == ERROR_SUCCESS;
+      } else {
+        // 自動起動設定を削除
+        final regDelResult = RegDeleteValue(
+          hKey.value,
+          TEXT(valueName),
+        );
+
+        RegCloseKey(hKey.value);
+        free(hKey);
+
+        return regDelResult == ERROR_SUCCESS;
+      }
+    } catch (e) {
+      print('自動起動設定エラー: $e');
+      return false;
+    }
+  }
+
+// 自動起動設定の確認
+  Future<bool> isAutoStartEnabled() async {
+    if (!Platform.isWindows) return false;
+
+    try {
+      final keyPath = 'Software\\Microsoft\\Windows\\CurrentVersion\\Run';
+      final valueName = 'PomodoroApp';
+
+      // レジストリキーを開く
+      final hKey = calloc<HKEY>();
+      final result = RegOpenKeyEx(
+        HKEY_CURRENT_USER,
+        TEXT(keyPath),
+        0,
+        KEY_QUERY_VALUE,
+        hKey,
+      );
+
+      if (result != ERROR_SUCCESS) {
+        free(hKey);
+        return false;
+      }
+
+      // 値を確認
+      final valueType = calloc<DWORD>();
+      final dataSize = calloc<DWORD>();
+      dataSize.value = 0;
+
+      final queryResult = RegQueryValueEx(
+        hKey.value,
+        TEXT(valueName),
+        nullptr,
+        valueType,
+        nullptr,
+        dataSize,
+      );
+
+      RegCloseKey(hKey.value);
+      free(hKey);
+      free(valueType);
+      free(dataSize);
+
+      return queryResult == ERROR_SUCCESS;
+    } catch (e) {
+      print('自動起動設定確認エラー: $e');
+      return false;
+    }
   }
 }
 

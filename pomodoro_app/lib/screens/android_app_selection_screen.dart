@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../android_app_controller.dart';
+import '../platforms/android/android_app_controller.dart';
 import '../models/restricted_app.dart';
 import '../providers/app_restriction_provider.dart';
 import '../widgets/app_icon.dart';

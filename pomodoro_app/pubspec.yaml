@@ -28,6 +28,7 @@ dependencies:
   # Windows機能アクセス
   win32: ^5.0.0
   ffi: ^2.0.1
+  window_manager: ^0.4.3
   
   # その他のユーティリティ
   intl: ^0.18.0
@@ -41,6 +42,8 @@ dependencies:
   # OSプラットフォーム検出
   platform: ^3.1.0
   audioplayers: ^6.2.0
+
+  system_tray: ^2.0.0
 
   csv: ^5.0.2
   path_provider: ^2.1.0

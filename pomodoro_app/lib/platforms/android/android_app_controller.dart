@@ -1,8 +1,8 @@
 // lib/android_app_controller.dart
 import 'package:flutter/services.dart';
 import 'dart:async';
-import './models/restricted_app.dart';
-import './providers/app_restriction_provider.dart';
+import '../../models/restricted_app.dart';
+import '../../providers/app_restriction_provider.dart';
 
 class AndroidAppController {
   static const MethodChannel _channel =
