@@ -137,7 +137,6 @@ class _AndroidAppSelectionScreenState extends State<AndroidAppSelectionScreen> {
           await appRestrictionProvider.updateRestrictedApp(
             app.copyWith(
               isRestricted: isSelected,
-              minutesPerPoint: _minutesPerPoint,
             ),
           );
         }
