@@ -11,10 +11,8 @@ import '../platforms/android/android_app_controller.dart';
 import '../utils/platform_utils.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
-import '../services/windows_background/windows_app_controller_enhanced.dart'
-    as enhanced;
-import '../services/windows_background/windows_background_service.dart';
 import 'dart:io';
+import '../services/windows_background/windows_system_tray_service.dart';
 
 class AppRestrictionProvider with ChangeNotifier {
   final _windowsAppController = WindowsAppController();
@@ -112,8 +110,7 @@ class AppRestrictionProvider with ChangeNotifier {
 
     if (platformUtils.isWindows) {
       // バックグラウンドサービスを初期化
-      await WindowsBackgroundService()
-          .initialize(arguments: Platform.executableArguments);
+      await WindowsSystemTrayService().initialize();
 
       // 設定に基づいて監視状態を復元
       final prefs = await SharedPreferences.getInstance();
@@ -218,7 +215,6 @@ class AppRestrictionProvider with ChangeNotifier {
         // 通常のコントローラは互換性のために残しつつ、
         // 強化されたコントローラも起動
         _windowsAppController.startMonitoring();
-        enhanced.WindowsAppController().startMonitoring();
       } else {
         _windowsAppController.startMonitoring();
       }
@@ -256,9 +252,6 @@ class AppRestrictionProvider with ChangeNotifier {
 
     if (platformUtils.isWindows) {
       _windowsAppController.stopMonitoring();
-      if (platformUtils.isWindows) {
-        enhanced.WindowsAppController().stopMonitoring();
-      }
     } else if (platformUtils.isAndroid) {
       await _stopAndroidMonitoringService();
     }
@@ -454,12 +447,13 @@ class AppRestrictionProvider with ChangeNotifier {
         );
         print("Android側に解除情報を通知: ${app.name}, 期限: $unlockUntil");
       } else if (platformUtils.isWindows) {
-        try {
-          await WindowsBackgroundService().updateAppUnlockInfo(restrictedApps);
-          print("Windows側バックグラウンドサービスに解除情報を通知: ${app.name}, 期限: $unlockUntil");
-        } catch (e) {
-          print('Windowsバックグラウンドサービス通知エラー: $e');
-        }
+        // try {
+        //   //await WindowsBackgroundService().updateAppUnlockInfo(restrictedApps);
+
+        //   print("Windows側バックグラウンドサービスに解除情報を通知: ${app.name}, 期限: $unlockUntil");
+        // } catch (e) {
+        //   print('Windowsバックグラウンドサービス通知エラー: $e');
+        // }
       }
 
       return true;
@@ -717,27 +711,5 @@ class AppRestrictionProvider with ChangeNotifier {
     final platformUtils = PlatformUtils();
 
     print("アプリ終了前のバックグラウンドサービス設定を開始します");
-    if (platformUtils.isWindows && Platform.isWindows) {
-      // アプリが閉じられてもバックグラウンドサービスが継続するよう設定
-      // 監視中であればバックグラウンドサービスを有効化
-      if (isMonitoring) {
-        try {
-          // バックグラウンドサービスを有効化
-          await WindowsBackgroundService().updateSettings(
-            serviceEnabled: true,
-          );
-
-          // *** 追加部分: 最新のアプリ解除情報を通知 ***
-          //await WindowsBackgroundService().updateAppUnlockInfo(restrictedApps);
-
-          // 監視状態を確実に保存
-          await _saveMonitoringState(true);
-
-          print("アプリ終了前にバックグラウンドサービスに最新状態を通知しました");
-        } catch (e) {
-          print('アプリ終了前のバックグラウンド設定エラー: $e');
-        }
-      }
-    }
   }
 }

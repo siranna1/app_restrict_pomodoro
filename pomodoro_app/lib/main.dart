@@ -22,16 +22,10 @@ import 'services/settings_service.dart';
 import 'package:app_links/app_links.dart';
 import 'dart:io';
 import 'platforms/android/android_app_controller.dart';
-import './services/windows_background/windows_background_service.dart';
 import 'package:window_manager/window_manager.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // コマンドライン引数を取得
-  final List<String> arguments =
-      Platform.environment.containsKey('FLUTTER_TEST')
-          ? [] // テスト環境では空リストを使用
-          : Platform.executableArguments;
   // Windowsの場合、バックグラウンドサービスを初期化
   if (Platform.isWindows) {
     WidgetsFlutterBinding.ensureInitialized();
@@ -53,28 +47,6 @@ void main() async {
         await windowManager.show();
         await windowManager.focus();
       });
-    }
-    // 適切なモードで起動するか確認
-    final shouldContinue =
-        await WindowsBackgroundService.launchInAppropriateMode();
-    if (!shouldContinue) {
-      // すでにバックグラウンドで実行中の場合は通知して終了
-      // ここでシステムトレイ通知などを表示することも可能
-      print('ポモドーロアプリはすでにバックグラウンドで実行中です');
-      exit(0);
-    }
-
-    // バックグラウンドサービスモードで起動された場合
-    if (arguments.contains('--minimized') ||
-        arguments.contains('--autostart')) {
-      await WindowsBackgroundService.runAsBackgroundService(arguments);
-      // バックグラウンドサービスモードの場合は、UIを表示せずに終了
-      if (arguments.contains('--service-only')) {
-        exit(0);
-      }
-    } else {
-      // 通常モードの場合はサービスを初期化
-      await WindowsBackgroundService().initialize(arguments: arguments);
     }
   }
 
@@ -190,6 +162,8 @@ class _MainScreenState extends State<MainScreen>
     // Windowsの場合、閉じるボタンのイベントをリッスン
     if (Platform.isWindows) {
       windowManager.addListener(this);
+      // デフォルトの挙動を防止（アプリを終了させない）
+      windowManager.setPreventClose(true);
     }
   }
 
@@ -295,18 +269,19 @@ class _MainScreenState extends State<MainScreen>
   @override
   void onWindowClose() async {
     print("ウィンドウが閉じられました");
-    // 閉じるボタンが押されたときの処理
-    final appRestrictionProvider =
-        Provider.of<AppRestrictionProvider>(context, listen: false);
-
-    // バックグラウンドサービスを準備
-    await appRestrictionProvider.prepareForAppClosure();
 
     // ウィンドウを非表示にするだけで終了しない
     await windowManager.hide();
 
     // デフォルトの挙動を防止（アプリを終了させない）
     await windowManager.setPreventClose(true);
+
+    // 閉じるボタンが押されたときの処理
+    final appRestrictionProvider =
+        Provider.of<AppRestrictionProvider>(context, listen: false);
+
+    // バックグラウンドサービスを準備
+    await appRestrictionProvider.prepareForAppClosure();
   }
 
   @override

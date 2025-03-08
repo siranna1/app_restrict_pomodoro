@@ -5,11 +5,12 @@ import 'package:flutter/services.dart';
 import 'package:system_tray/system_tray.dart';
 import 'package:path/path.dart' as path;
 //import '../../platforms/windows/windows_app_controller.dart';
-import 'windows_app_controller_enhanced.dart';
+import '../../platforms/windows/windows_app_controller.dart';
 import '../../services/database_helper.dart';
 import '../../models/restricted_app.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:window_manager/window_manager.dart';
 
 class WindowsSystemTrayService {
   final SystemTray _systemTray = SystemTray();
@@ -43,13 +44,13 @@ class WindowsSystemTrayService {
 
   // システムトレイの設定
   Future<void> _setupSystemTray() async {
-    String iconPath = 'assets/app_icon.ico';
+    String iconPath = 'assets/icon/app_icon.ico';
 
     // デバッグビルドで実行時にアセットパスを調整
     if (Directory.current.path.endsWith('build/windows/runner/Debug') ||
         Directory.current.path.endsWith('build/windows/runner/Release')) {
-      iconPath = path.join(
-          Directory.current.path, 'data/flutter_assets/assets/app_icon.ico');
+      iconPath = path.join(Directory.current.path,
+          'data/flutter_assets/assets/icon/app_icon.ico');
     }
 
     // システムトレイのアイコンを設定
@@ -72,7 +73,12 @@ class WindowsSystemTrayService {
       MenuSeparator(),
       MenuItemLabel(
         label: 'アプリを表示',
-        onClicked: (_) => _appWindow.show(),
+        onClicked: (_) async {
+          if (Platform.isWindows) {
+            await windowManager.show();
+            await windowManager.focus();
+          }
+        },
       ),
       MenuSeparator(),
       MenuItemLabel(
@@ -92,6 +98,16 @@ class WindowsSystemTrayService {
         _systemTray.popUpContextMenu();
       }
     });
+  }
+
+  Future<void> hideWindow() async {
+    if (Platform.isWindows) {
+      try {
+        await windowManager.hide();
+      } catch (e) {
+        print('ウィンドウ非表示エラー: $e');
+      }
+    }
   }
 
   // 制限アプリの読み込み
@@ -139,7 +155,7 @@ class WindowsSystemTrayService {
 
     // トレイ通知
     _systemTray.setToolTip('ポモドーロアプリ（監視中）');
-    _systemTray.setImage('assets/app_icon_active.ico');
+    _systemTray.setImage('assets/icon/app_icon_active.ico');
   }
 
   // 監視の停止
@@ -153,7 +169,7 @@ class WindowsSystemTrayService {
 
     // トレイ通知を元に戻す
     _systemTray.setToolTip('ポモドーロアプリ');
-    _systemTray.setImage('assets/app_icon.ico');
+    _systemTray.setImage('assets/icon/app_icon.ico');
   }
 
   // 制限アプリの確認

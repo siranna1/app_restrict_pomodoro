@@ -195,6 +195,18 @@ class WindowsAppController {
     }
   }
 
+  // アプリが実行中かチェック（外部から呼び出し用）
+  bool checkIfAppIsRunning(String executablePath) {
+    final runningApps = _getRunningApplications();
+    return runningApps.any((process) =>
+        process.executablePath.toLowerCase() == executablePath.toLowerCase());
+  }
+
+  // アプリケーションを終了（外部から呼び出し用）
+  void terminateApplication(String executablePath) {
+    _terminateApplication(executablePath);
+  }
+
   // 通知を表示
   void _showNotification(RestrictedApp app) {
     // トースト通知を表示（実際にはFlutterの通知機能を使用）
