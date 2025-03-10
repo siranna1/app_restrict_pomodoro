@@ -9,7 +9,7 @@ import '../models/app_usage_session.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'dart:io' show Platform;
 import '../models/daily_goal.dart';
-
+import 'dart:async';
 import 'dart:math';
 
 class DatabaseHelper {
@@ -17,6 +17,22 @@ class DatabaseHelper {
   static Database? _database;
 
   DatabaseHelper._init();
+  // 新しいdefault constructor - シングルトンインスタンスを返す
+  DatabaseHelper() {
+    print(
+        'Warning: Using default constructor. Consider using DatabaseHelper.instance instead.');
+    // 何もしない - 既存のシングルトンインスタンスを使用する
+  }
+  // 初期化メソッド - 非同期の初期化処理をここに集約
+  Future<void> initialize() async {
+    // データベースファクトリの初期化
+    await initDatabaseFactory();
+
+    // データベースへの最初のアクセスを行い、初期化を完了
+    await database;
+
+    print('DatabaseHelper initialized successfully');
+  }
 
   // 初期化
   Future<void> initDatabaseFactory() async {
@@ -53,56 +69,62 @@ class DatabaseHelper {
 
   Future<void> _createDB(Database db, int version) async {
     await db.execute('''
-      CREATE TABLE tasks (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        category TEXT NOT NULL,
-        description TEXT,
-        estimatedPomodoros INTEGER NOT NULL,
-        completedPomodoros INTEGER NOT NULL,
-        createdAt TEXT NOT NULL,
-        updatedAt TEXT NOT NULL,
-        tickTickId TEXT
-      )
-    ''');
+    CREATE TABLE tasks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      category TEXT NOT NULL,
+      description TEXT,
+      estimatedPomodoros INTEGER NOT NULL,
+      completedPomodoros INTEGER NOT NULL,
+      createdAt TEXT NOT NULL,
+      updatedAt TEXT NOT NULL,
+      tickTickId TEXT,
+      firebaseId TEXT,
+      isDeleted INTEGER DEFAULT 0
+    )
+  ''');
 
     await db.execute('''
-      CREATE TABLE pomodoro_sessions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        taskId INTEGER NOT NULL,
-        startTime TEXT NOT NULL,
-        endTime TEXT NOT NULL,
-        durationMinutes INTEGER NOT NULL,
-        completed INTEGER NOT NULL,
-        focusScore REAL NOT NULL,
-        timeOfDay TEXT,
-        interruptionCount INTEGER DEFAULT 0,
-        mood TEXT,
-        isBreak INTEGER DEFAULT 0,
-        FOREIGN KEY (taskId) REFERENCES tasks (id) ON DELETE CASCADE
-      )
-    ''');
+    CREATE TABLE pomodoro_sessions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      taskId INTEGER NOT NULL,
+      startTime TEXT NOT NULL,
+      endTime TEXT NOT NULL,
+      durationMinutes INTEGER NOT NULL,
+      completed INTEGER NOT NULL,
+      focusScore REAL NOT NULL,
+      timeOfDay TEXT,
+      interruptionCount INTEGER DEFAULT 0,
+      mood TEXT,
+      isBreak INTEGER DEFAULT 0,
+      firebaseId TEXT,
+      FOREIGN KEY (taskId) REFERENCES tasks (id) ON DELETE CASCADE
+    )
+  ''');
 
     await db.execute('''
-      CREATE TABLE restricted_apps (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        executablePath TEXT NOT NULL,
-        allowedMinutesPerDay INTEGER NOT NULL,
-        isRestricted INTEGER NOT NULL,
-        requiredPomodorosToUnlock INTEGER,
-        pointCostPerHour INTEGER DEFAULT 2,
-        minutesPerPoint INTEGER DEFAULT 30,
-        currentSessionEnd TEXT
-      )
-    ''');
+    CREATE TABLE restricted_apps (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      executablePath TEXT NOT NULL,
+      allowedMinutesPerDay INTEGER NOT NULL,
+      isRestricted INTEGER NOT NULL,
+      requiredPomodorosToUnlock INTEGER,
+      pointCostPerHour INTEGER DEFAULT 2,
+      minutesPerPoint INTEGER DEFAULT 30,
+      currentSessionEnd TEXT,
+      firebaseId TEXT
+    )
+  ''');
+
     // ポイント管理用テーブル
     await db.execute('''
     CREATE TABLE reward_points (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       earnedPoints INTEGER NOT NULL,
       usedPoints INTEGER NOT NULL,
-      lastUpdated TEXT NOT NULL
+      lastUpdated TEXT NOT NULL,
+      firebaseId TEXT
     )
   ''');
 
@@ -113,26 +135,43 @@ class DatabaseHelper {
       startTime TEXT NOT NULL,
       endTime TEXT NOT NULL,
       pointsSpent INTEGER NOT NULL,
+      firebaseId TEXT,
       FOREIGN KEY (appId) REFERENCES restricted_apps (id) ON DELETE CASCADE
     )
   ''');
 
-    // 新しく追加するテーブル - 日次目標
+    // 日次目標テーブル
     await db.execute('''
-      CREATE TABLE daily_goals (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        date TEXT NOT NULL,
-        targetPomodoros INTEGER NOT NULL,
-        achievedPomodoros INTEGER NOT NULL,
-        achieved INTEGER NOT NULL
-      )
-    ''');
+    CREATE TABLE daily_goals (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      date TEXT NOT NULL,
+      targetPomodoros INTEGER NOT NULL,
+      achievedPomodoros INTEGER NOT NULL,
+      achieved INTEGER NOT NULL,
+      firebaseId TEXT
+    )
+  ''');
+
     // インデックスの作成（検索パフォーマンス向上のため）
     await db.execute(
         'CREATE INDEX idx_pomodoro_sessions_taskId ON pomodoro_sessions(taskId)');
     await db.execute(
         'CREATE INDEX idx_pomodoro_sessions_startTime ON pomodoro_sessions(startTime)');
     await db.execute('CREATE INDEX idx_daily_goals_date ON daily_goals(date)');
+
+    // Firebase ID用のインデックス作成
+    await db.execute('CREATE INDEX idx_tasks_firebaseId ON tasks(firebaseId)');
+    await db.execute(
+        'CREATE INDEX idx_pomodoro_sessions_firebaseId ON pomodoro_sessions(firebaseId)');
+    await db.execute(
+        'CREATE INDEX idx_app_usage_sessions_firebaseId ON app_usage_sessions(firebaseId)');
+    await db.execute(
+        'CREATE INDEX idx_restricted_apps_firebaseId ON restricted_apps(firebaseId)');
+    await db.execute(
+        'CREATE INDEX idx_daily_goals_firebaseId ON daily_goals(firebaseId)');
+
+    // 更新日時のインデックス作成（変更検出用）
+    await db.execute('CREATE INDEX idx_tasks_updatedAt ON tasks(updatedAt)');
   }
 
   // データベースアップグレード処理
@@ -256,6 +295,29 @@ class DatabaseHelper {
         print('daily_goalsテーブルを作成しました');
       } catch (e) {
         print('daily_goalsテーブル作成エラー: $e');
+      }
+    }
+    if (oldVersion < 4) {
+      // バージョン3から4へのアップグレード（同期フィールド追加）
+      print('データベースをバージョン3から4にアップグレードします（同期フィールド追加）');
+
+      try {
+        // タスクテーブルに同期フィールドを追加
+        await db.execute('ALTER TABLE tasks ADD COLUMN firebaseId TEXT');
+        await db.execute(
+            'ALTER TABLE tasks ADD COLUMN isDeleted INTEGER DEFAULT 0');
+
+        // ポモドーロセッションテーブルに同期フィールドを追加
+        await db.execute(
+            'ALTER TABLE pomodoro_sessions ADD COLUMN firebaseId TEXT');
+
+        // アプリ使用セッションテーブルに同期フィールドを追加
+        await db.execute(
+            'ALTER TABLE app_usage_sessions ADD COLUMN firebaseId TEXT');
+
+        print('同期フィールドを追加しました');
+      } catch (e) {
+        print('同期フィールド追加エラー: $e');
       }
     }
   }
@@ -728,9 +790,11 @@ class DatabaseHelper {
     return await db.insert('tasks', task.toMap());
   }
 
+  // 論理削除されていないタスクのみを取得（上書き）
   Future<List<Task>> getTasks() async {
     final db = await database;
-    final results = await db.query('tasks', orderBy: 'updatedAt DESC');
+    final results = await db.query('tasks',
+        where: 'isDeleted = 0', orderBy: 'updatedAt DESC');
     return results.map((map) => Task.fromMap(map)).toList();
   }
 
@@ -1011,6 +1075,187 @@ class DatabaseHelper {
     });
 
     return result;
+  }
+
+  // 特定の時間以降に変更されたタスクを取得
+  Future<List<Task>> getTasksChangedSince(DateTime? timestamp) async {
+    final db = await database;
+
+    if (timestamp == null) {
+      // タイムスタンプがnullの場合は全てのタスクを返す
+      return getTasks();
+    }
+
+    final List<Map<String, dynamic>> maps = await db.query(
+      'tasks',
+      where: 'updatedAt > ?',
+      whereArgs: [timestamp.toIso8601String()],
+    );
+
+    return List.generate(maps.length, (i) {
+      return Task.fromMap(maps[i]);
+    });
+  }
+
+// 特定の時間以降に変更されたポモドーロセッションを取得
+  Future<List<PomodoroSession>> getSessionsChangedSince(
+      DateTime? timestamp) async {
+    final db = await database;
+
+    if (timestamp == null) {
+      // タイムスタンプがnullの場合は全てのセッションを返す
+      return getPomodoroSessions();
+    }
+
+    final List<Map<String, dynamic>> maps = await db.query(
+      'pomodoro_sessions',
+      where: 'endTime > ?',
+      whereArgs: [timestamp.toIso8601String()],
+    );
+
+    return List.generate(maps.length, (i) {
+      return PomodoroSession.fromMap(maps[i]);
+    });
+  }
+
+// 特定の時間以降に変更されたアプリ使用セッションを取得
+  Future<List<AppUsageSession>> getAppUsageSessionsChangedSince(
+      DateTime? timestamp) async {
+    final db = await database;
+
+    if (timestamp == null) {
+      // タイムスタンプがnullの場合は全てのセッションを返す
+      return getAppUsageSessions();
+    }
+
+    final List<Map<String, dynamic>> maps = await db.query(
+      'app_usage_sessions',
+      where: 'endTime > ?',
+      whereArgs: [timestamp.toIso8601String()],
+    );
+
+    return List.generate(maps.length, (i) {
+      return AppUsageSession.fromMap(maps[i]);
+    });
+  }
+
+  // ポモドーロセッションの更新
+  Future<void> updatePomodoroSession(PomodoroSession session) async {
+    final db = await database;
+
+    await db.update(
+      'pomodoro_sessions',
+      session.toMap(),
+      where: 'id = ?',
+      whereArgs: [session.id],
+    );
+  }
+
+// アプリ使用セッションの更新
+  Future<void> updateAppUsageSession(AppUsageSession session) async {
+    final db = await database;
+
+    await db.update(
+      'app_usage_sessions',
+      session.toMap(),
+      where: 'id = ?',
+      whereArgs: [session.id],
+    );
+  }
+
+  // Firebase IDでタスクを検索
+  Future<Task?> getTaskByFirebaseId(String firebaseId) async {
+    final db = await database;
+
+    final List<Map<String, dynamic>> maps = await db.query(
+      'tasks',
+      where: 'firebaseId = ?',
+      whereArgs: [firebaseId],
+    );
+
+    if (maps.isEmpty) {
+      return null;
+    }
+
+    return Task.fromMap(maps.first);
+  }
+
+// Firebase IDでポモドーロセッションを検索
+  Future<PomodoroSession?> getSessionByFirebaseId(String firebaseId) async {
+    final db = await database;
+
+    final List<Map<String, dynamic>> maps = await db.query(
+      'pomodoro_sessions',
+      where: 'firebaseId = ?',
+      whereArgs: [firebaseId],
+    );
+
+    if (maps.isEmpty) {
+      return null;
+    }
+
+    return PomodoroSession.fromMap(maps.first);
+  }
+
+// Firebase IDでアプリ使用セッションを検索
+  Future<AppUsageSession?> getAppUsageSessionByFirebaseId(
+      String firebaseId) async {
+    final db = await database;
+
+    final List<Map<String, dynamic>> maps = await db.query(
+      'app_usage_sessions',
+      where: 'firebaseId = ?',
+      whereArgs: [firebaseId],
+    );
+
+    if (maps.isEmpty) {
+      return null;
+    }
+
+    return AppUsageSession.fromMap(maps.first);
+  }
+
+  // タスクテーブルからすべてのカテゴリを取得
+  Future<List<String>> getAllCategories() async {
+    final db = await database;
+
+    final List<Map<String, dynamic>> maps = await db.rawQuery('''
+    SELECT DISTINCT category FROM tasks WHERE isDeleted = 0
+  ''');
+
+    return maps.map((map) => map['category'] as String).toList();
+  }
+
+// カテゴリ別にタスクを取得
+  Future<List<Task>> getTasksByCategory(String category) async {
+    final db = await database;
+
+    final List<Map<String, dynamic>> maps = await db.query(
+      'tasks',
+      where: 'category = ? AND isDeleted = 0',
+      whereArgs: [category],
+      orderBy: 'updatedAt DESC',
+    );
+
+    return List.generate(maps.length, (i) {
+      return Task.fromMap(maps[i]);
+    });
+  }
+
+  // タスクを論理削除
+  Future<int> softDeleteTask(int id) async {
+    final db = await database;
+
+    final task = await getTask(id);
+    if (task == null) {
+      return 0;
+    }
+
+    // 論理削除フラグを設定
+    task.isDeleted = true;
+    task.updatedAt = DateTime.now();
+
+    return await updateTask(task);
   }
 
 // テスト用データを生成して追加する

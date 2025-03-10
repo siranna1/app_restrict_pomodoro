@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "931892292987",
+    "firebase_url": "https://pomodoroappsync-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "pomodoroappsync",
+    "storage_bucket": "pomodoroappsync.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:931892292987:android:6483bf9d68ee0af9b4a1de",
+        "android_client_info": {
+          "package_name": "com.example.pomodoro_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB-ivXgcLob10PdSSSU4eS5tQk1gJsGGMg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

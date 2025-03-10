@@ -33,10 +33,8 @@ dependencies:
   # その他のユーティリティ
   intl: ^0.18.0
   url_launcher: ^6.1.5
-#  file_picker: ^5.0.1
   file_picker: ^9.0.2
   http: ^0.13.5
-#  flutter_local_notifications: ^9.7.0
   flutter_local_notifications: ^18.0.1
   
   # OSプラットフォーム検出
@@ -52,9 +50,14 @@ dependencies:
   printing: ^5.11.0
   syncfusion_flutter_charts: ^22.2.10
   image: ^4.0.0
-#  uni_links: ^0.5.1
   app_links: ^6.4.0
-  #device_apps: ^2.2.0  # アプリのアイコンなどの情報を取得するプラグイン
+
+  # Firebase
+  firebase_core: ^2.15.0
+  firebase_database: ^10.2.4
+  firebase_auth: ^4.7.2
+  connectivity_plus: ^4.0.2
+  workmanager: ^0.5.1
   
 
 

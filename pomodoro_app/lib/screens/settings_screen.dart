@@ -9,6 +9,9 @@ import 'app_restriction_screen.dart';
 import 'ticktick_sync_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/settings_service.dart';
+import '../providers/sync_provider.dart';
+import 'package:intl/intl.dart';
+import 'sync_setting_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -101,7 +104,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final pomodoroProvider = Provider.of<PomodoroProvider>(context);
-
+    final syncProvider = Provider.of<SyncProvider>(context);
     if (_isLoading) {
       return Scaffold(
         appBar: AppBar(
@@ -332,6 +335,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           // 連携設定
           _buildSectionHeader(context, '連携'),
 
+          SyncSettingScreen(),
           ListTile(
             title: const Text('TickTick連携'),
             subtitle: const Text('TickTickとタスクやポモドーロ記録を同期します'),
