@@ -69,13 +69,16 @@ class AppMonitorService : Service() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
+        
     }
     
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // コマンドに応じた処理
         when (intent?.action) {
             "START_MONITORING" -> {
+                
                 val packages = intent.getStringArrayListExtra("packages")
+                println("制限パッケージリストを受信: $packages")
                 if (packages != null) {
                     restrictedPackages = packages
                     startMonitoring()
@@ -493,7 +496,7 @@ class AppMonitorService : Service() {
         // サービスの自己再起動（追加の安全策）
         val restartIntent = Intent(applicationContext, AppMonitorService::class.java)
         restartIntent.action = "START_MONITORING"
-        restartIntent.putStringArrayListExtra("packages", ArrayList(restrictedPackages))
-        startService(restartIntent)
+        //restartIntent.putStringArrayListExtra("packages", ArrayList(restrictedPackages))
+        //startService(restartIntent)
     }
 }
