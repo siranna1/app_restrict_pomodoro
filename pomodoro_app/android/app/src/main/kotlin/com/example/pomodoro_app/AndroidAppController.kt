@@ -225,60 +225,17 @@ class AndroidAppController(
         }
     }
     
-    //現在startmonitoringSeriveceを使用しているため、こちらは使用されていない
-    private fun startMonitoring() {
-        if (isMonitoring) return
-        println("Android監視サービス開始を試みます")
-        if (!hasUsageStatsPermission()) {
-            println("使用状況アクセス権限がありません - 監視開始できません")
-            return
-        }
-        isMonitoring = true
-        println("Android監視サービス開始: ${Date()}")
-        monitorTimer = Timer().apply {
-            scheduleAtFixedRate(object : TimerTask() {
-                override fun run() {
-                    try {
-                        val currentApp = getCurrentForegroundApp()
-                        // ログ出力でデバッグ
-                        println("現在実行中のアプリ: $currentApp")
-
-                        if (currentApp != null && restrictedPackages.contains(currentApp)) {
-                            println("制限対象アプリを検出: $currentApp")
-
-                            // 制限対象アプリが起動中なので終了させる
-                            killApp(currentApp)
-
-                            // UI通知用にメインスレッドで処理する
-                            activity.runOnUiThread {
-                                // 通知を表示
-                                val toast = android.widget.Toast.makeText(
-                                    context,
-                                    "制限アプリ「$currentApp」の使用を停止しました",
-                                    android.widget.Toast.LENGTH_LONG
-                                )
-                                toast.show()
-                            }
-                        }
-                    } catch (e: Exception) {
-                        println("アプリ監視中にエラー: ${e.message}")
-                    }
-                }
-            }, 0, MONITORING_INTERVAL) // 1秒ごとにチェック
-        }
-    }
     
-    private fun stopMonitoring() {
-        monitorTimer?.cancel()
-        monitorTimer = null
-        isMonitoring = false
-    }
 
     // サービス関連メソッドの追加
 
     fun startMonitoringService(packages: List<String>): Boolean {
         try {
-            if(isMonitoring) return false
+            if(isMonitoring) 
+            {
+                println("サービスは既に起動しています")
+                return true
+            }
             if (!hasUsageStatsPermission()) {
                 println("使用状況アクセス権限がありません - 監視開始できません")
                 return false
@@ -308,11 +265,11 @@ class AndroidAppController(
     }
     fun stopMonitoringService(): Boolean {
         try {
+            isMonitoring = false
             val intent = Intent(context, AppMonitorService::class.java)
             intent.action = "STOP_MONITORING"
             context.startService(intent)
 
-            isMonitoring = false
 
             return true
         } catch (e: Exception) {
@@ -692,7 +649,7 @@ class AndroidAppController(
     
     // アプリケーションが終了する時にリソースを解放
     fun dispose() {
-        stopMonitoring()
+        //stopMonitoringService()
         removeCurrentOverlay()
     }
 }

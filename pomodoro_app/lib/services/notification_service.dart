@@ -2,6 +2,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:flutter/material.dart';
+import 'package:pomodoro_app/utils/platform_utils.dart';
 
 class NotificationService {
   // 静的フィールドとプライベートコンストラクタを削除し、通常のクラスにする
@@ -32,21 +33,60 @@ class NotificationService {
         android: initializationSettingsAndroid,
         iOS: initializationSettingsIOS,
       );
+      await _createNotificationChannels();
 
       final bool? result = await _flutterLocalNotificationsPlugin.initialize(
         initializationSettings,
+        onDidReceiveNotificationResponse: (NotificationResponse response) {
+          // 通知タップ時の処理を追加
+          print('通知がタップされました: ${response.payload}');
+        },
       );
 
       _isInitialized = result ?? false;
       return _isInitialized;
     } catch (e) {
+      print('通知の初期化エラー: $e');
       _isInitialized = false;
       return false;
     }
   }
 
+  // Android向け通知チャンネル作成（新規追加）
+  Future<void> _createNotificationChannels() async {
+    const AndroidNotificationChannel pomodoroChannel =
+        AndroidNotificationChannel(
+      'pomodoro_channel', // チャンネルID
+      'ポモドーロ通知', // チャンネル名
+      description: 'ポモドーロタイマーの通知チャンネル',
+      importance: Importance.max,
+      playSound: true,
+      enableVibration: true,
+    );
+
+    const AndroidNotificationChannel breakChannel = AndroidNotificationChannel(
+      'break_channel', // チャンネルID
+      '休憩通知', // チャンネル名
+      description: '休憩時間の通知チャンネル',
+      importance: Importance.max,
+      playSound: true,
+      enableVibration: true,
+    );
+
+    await _flutterLocalNotificationsPlugin
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(pomodoroChannel);
+
+    await _flutterLocalNotificationsPlugin
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(breakChannel);
+  }
+
   // 通知を表示 - エラーハンドリングを強化
-  Future<bool> showNotification(String title, String body) async {
+  Future<bool> showNotification(String title, String body,
+      {String? channel, String? payload}) async {
     // 初期化されていない場合は初期化を試みる
     if (!_isInitialized) {
       final initialized = await init();
@@ -54,14 +94,21 @@ class NotificationService {
     }
 
     try {
-      const AndroidNotificationDetails androidPlatformChannelSpecifics =
+      // チャンネルIDの設定（デフォルトは pomodoro_channel）
+      final channelId = channel ?? 'pomodoro_channel';
+
+      final AndroidNotificationDetails androidPlatformChannelSpecifics =
           AndroidNotificationDetails(
-        'pomodoro_channel',
-        'ポモドーロ通知',
+        channelId,
+        channelId == 'pomodoro_channel' ? 'ポモドーロ通知' : '休憩通知',
         channelDescription: 'ポモドーロタイマーの通知チャンネル',
         importance: Importance.max,
         priority: Priority.high,
         showWhen: true,
+        enableVibration: true,
+        playSound: true,
+        icon: '@mipmap/ic_launcher', // アイコンの指定
+        largeIcon: const DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
       );
 
       const DarwinNotificationDetails iOSPlatformChannelSpecifics =
@@ -71,18 +118,21 @@ class NotificationService {
         presentSound: true,
       );
 
-      const NotificationDetails platformChannelSpecifics = NotificationDetails(
+      NotificationDetails platformChannelSpecifics = NotificationDetails(
         android: androidPlatformChannelSpecifics,
         iOS: iOSPlatformChannelSpecifics,
       );
-
+      // 一意のID生成（通知が上書きされないように）
+      final notificationId = DateTime.now().millisecondsSinceEpoch ~/ 1000;
       await _flutterLocalNotificationsPlugin.show(
-        0,
+        notificationId,
         title,
         body,
         platformChannelSpecifics,
+        payload: payload,
       );
 
+      print('通知を送信しました: $title - $body');
       return true;
     } catch (e) {
       return false;
@@ -205,11 +255,13 @@ class NotificationService {
     BuildContext? context,
     String title,
     String message, {
+    String? channel,
+    String? payload,
     VoidCallback? onDismiss,
     bool useDialog = false, // デフォルトはダイアログなし
   }) {
     // システム通知は常に表示
-    showNotification(title, message);
+    showNotification(title, message, channel: channel, payload: payload);
 
     // コンテキストがあれば、アプリ内通知も表示
     if (context != null) {
@@ -221,5 +273,32 @@ class NotificationService {
         showInAppSnackBar(context, title, message, onDismiss: onDismiss);
       }
     }
+  }
+
+  // 通知権限のリクエスト
+  Future<bool> requestNotificationPermissions() async {
+    PlatformUtils platformUtils = PlatformUtils();
+    if (platformUtils.isAndroid) {
+      // Android 13以上で実行時権限が必要
+      if (int.parse(platformUtils.platform.version.split('.')[0]) >= 13) {
+        final status = await _flutterLocalNotificationsPlugin
+            .resolvePlatformSpecificImplementation<
+                AndroidFlutterLocalNotificationsPlugin>()
+            ?.requestNotificationsPermission();
+        return status ?? false;
+      }
+      return true;
+    } else if (platformUtils.isIOS) {
+      final status = await _flutterLocalNotificationsPlugin
+          .resolvePlatformSpecificImplementation<
+              IOSFlutterLocalNotificationsPlugin>()
+          ?.requestPermissions(
+            alert: true,
+            badge: true,
+            sound: true,
+          );
+      return status ?? false;
+    }
+    return true;
   }
 }

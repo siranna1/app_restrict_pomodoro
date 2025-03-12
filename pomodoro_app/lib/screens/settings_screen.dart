@@ -5,10 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/pomodoro_provider.dart';
 import '../providers/app_restriction_provider.dart';
-import 'app_restriction_screen.dart';
 import 'ticktick_sync_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/settings_service.dart';
+import '../services/notification_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -240,7 +240,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               },
             ),
           ),
-
           const Divider(),
 
           // 通知と音設定

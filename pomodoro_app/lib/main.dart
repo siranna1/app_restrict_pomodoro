@@ -63,6 +63,7 @@ void main() async {
   // 通知サービスをインスタンス化して初期化
   final notificationService = NotificationService();
   await notificationService.init();
+  await notificationService.requestNotificationPermissions();
   // 音声サービスをインスタンス化
   final soundService = SoundService();
 
@@ -207,9 +208,8 @@ class _MainScreenState extends State<MainScreen>
       if (hasPermission) {
         // バッテリー最適化設定の確認
         appRestrictionProvider.checkAndRequestBatteryOptimization(context);
-        // 監視開始
-        appRestrictionProvider.startMonitoring();
-        print('Androidアプリ監視を自動開始しました');
+        // 監視状態ロード
+        appRestrictionProvider.loadMonitoringState();
       } else {
         // 権限ガイドを表示
         appRestrictionProvider.showPermissionGuideIfNeeded(context);

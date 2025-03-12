@@ -546,12 +546,7 @@ class SettingsTab extends StatelessWidget {
             subtitle: const Text('ポイントを使ってアプリを一時的に解除できます'),
             value: appRestrictionProvider.isMonitoring,
             onChanged: (value) {
-              if (value) {
-                _toggleMonitoring(context);
-                appRestrictionProvider.startMonitoring();
-              } else {
-                appRestrictionProvider.stopMonitoring();
-              }
+              _toggleMonitoring(context);
             },
           ),
           const Divider(),
@@ -903,9 +898,9 @@ class SettingsTab extends StatelessWidget {
     } else {
       appRestrictionProvider.startMonitoring();
       // 権限が必要なら自動的にダイアログが表示される
-      if (appRestrictionProvider.needsPermissionGuide) {
-        appRestrictionProvider.showPermissionGuideIfNeeded(context);
-      }
+      //if (appRestrictionProvider.needsPermissionGuide) {
+      //  appRestrictionProvider.showPermissionGuideIfNeeded(context);
+      //}
     }
   }
 }

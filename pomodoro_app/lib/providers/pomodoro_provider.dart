@@ -106,12 +106,14 @@ class PomodoroProvider with ChangeNotifier {
           //isBreak = false;
           //isRunning = false;
           startTimer(currentTask!);
-          notificationService.showNotification('休憩終了', '次のポモドーロセッションを始めましょう。');
+          //notificationService.showNotification('休憩終了', '次のポモドーロセッションを始めましょう。');
           final context = GlobalContext.context;
           notificationService.showNotificationBasedOnState(
             context,
             '休憩終了',
             '次のポモドーロセッションを始めましょう。',
+            channel: 'break_channel',
+            payload: 'break_completed',
             onDismiss: () => soundService.stopAllSounds(), // ダイアログを閉じたら音を停止
           );
         }
@@ -136,16 +138,18 @@ class PomodoroProvider with ChangeNotifier {
           ? 'ポモドーロをスキップしました。$customDuration分間の作業を記録しました。'
           : '休憩時間です。次のセッションを始める準備をしましょう。';
       final title = customDuration != null ? 'ポモドーロスキップ' : 'ポモドーロ完了';
-      notificationService.showNotification(
-        title,
-        message,
-      );
+      //notificationService.showNotification(
+      //  title,
+      //  message,
+      //);
       final context = GlobalContext.context;
       notificationService.showNotificationBasedOnState(
         context,
         title,
         message,
         onDismiss: () => soundService.stopAllSounds(), // ダイアログを閉じたら音を停止
+        payload: 'pomodoro_complete', // 通知タップ時のペイロード
+        channel: 'pomodoro_channel', // 通知チャンネル
       );
       // 休憩モードに移行
       startBreak();
@@ -169,12 +173,14 @@ class PomodoroProvider with ChangeNotifier {
       await _completePomodoro(customDuration: elapsedMinutes);
     } else if (isBreak) {
       await soundService.playBreakCompleteSound();
-      notificationService.showNotification('休憩終了', '次のポモドーロセッションを始めましょう。');
+      //notificationService.showNotification('休憩終了', '次のポモドーロセッションを始めましょう。');
       final context = GlobalContext.context;
       notificationService.showNotificationBasedOnState(
         context,
         '休憩終了',
         '次のポモドーロセッションを始めましょう。',
+        channel: 'break_channel',
+        payload: 'break_completed',
         onDismiss: () => soundService.stopAllSounds(), // ダイアログを閉じたら音を停止
       );
       startTimer(currentTask!);
