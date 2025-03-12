@@ -112,6 +112,8 @@ class PomodoroProvider with ChangeNotifier {
             context,
             '休憩終了',
             '次のポモドーロセッションを始めましょう。',
+            channel: 'break_channel',
+            payload: 'break_completed',
             onDismiss: () => soundService.stopAllSounds(), // ダイアログを閉じたら音を停止
           );
         }
@@ -146,6 +148,8 @@ class PomodoroProvider with ChangeNotifier {
         title,
         message,
         onDismiss: () => soundService.stopAllSounds(), // ダイアログを閉じたら音を停止
+        payload: 'pomodoro_complete', // 通知タップ時のペイロード
+        channel: 'pomodoro_channel', // 通知チャンネル
       );
       // 休憩モードに移行
       startBreak();
@@ -175,6 +179,8 @@ class PomodoroProvider with ChangeNotifier {
         context,
         '休憩終了',
         '次のポモドーロセッションを始めましょう。',
+        channel: 'break_channel',
+        payload: 'break_completed',
         onDismiss: () => soundService.stopAllSounds(), // ダイアログを閉じたら音を停止
       );
       startTimer(currentTask!);

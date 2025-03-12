@@ -109,8 +109,6 @@ class AppMonitorService : Service() {
             }
         }
         
-        // フォアグラウンドサービスとして実行
-        startForeground(NOTIFICATION_ID, createNotification())
         
         // サービスが強制終了された場合に再起動
         return START_STICKY
@@ -121,7 +119,7 @@ class AppMonitorService : Service() {
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 "アプリ監視サービス",
-                NotificationManager.IMPORTANCE_LOW
+                NotificationManager.IMPORTANCE_MIN
             ).apply {
                 description = "ポモドーロ中にアプリ使用を制限するサービス"
                 setShowBadge(false)
@@ -150,7 +148,7 @@ class AppMonitorService : Service() {
         return builder
             .setContentTitle("ポモドーロアプリ")
             .setContentText("アプリ制限機能が動作中です")
-            .setSmallIcon(R.mipmap.ic_launcher) // アイコンを追加
+            .setSmallIcon(R.mipmap.launcher_icon) // アイコンを追加
             .setContentIntent(pendingIntent)
             .build()
     }
@@ -163,7 +161,8 @@ class AppMonitorService : Service() {
         }
         println("アプリ監視サービスを開始 at appmonitorservice.kt")
         isRunning = true
-
+        // フォアグラウンドサービスとして実行
+        startForeground(NOTIFICATION_ID, createNotification())
         startUnlockExpirationChecker()
 
         monitorTimer = Timer().apply {

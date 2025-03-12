@@ -63,6 +63,7 @@ void main() async {
   // 通知サービスをインスタンス化して初期化
   final notificationService = NotificationService();
   await notificationService.init();
+  await notificationService.requestNotificationPermissions();
   // 音声サービスをインスタンス化
   final soundService = SoundService();
 
