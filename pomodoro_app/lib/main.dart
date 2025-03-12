@@ -35,6 +35,8 @@ import 'screens/ticktick_sync_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Firebase初期化
+  await FirebaseConfig.initialize();
   // サービス初期化
   final databaseHelper = DatabaseHelper();
   await databaseHelper.initialize();
@@ -54,8 +56,6 @@ void main() async {
   );
   final networkConnectivity = NetworkConnectivity();
 
-  // Firebase初期化
-  await FirebaseConfig.initialize();
   // Windowsの場合、バックグラウンドサービスを初期化
   if (Platform.isWindows) {
     WidgetsFlutterBinding.ensureInitialized();
@@ -109,6 +109,7 @@ void main() async {
   runApp(
     MultiProvider(
       providers: [
+        // 既存のプロバイダー
         ChangeNotifierProvider(create: (_) => AppRestrictionProvider()),
         ChangeNotifierProvider(create: (_) => TickTickProvider()),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
@@ -123,13 +124,19 @@ void main() async {
         ChangeNotifierProvider<TaskProvider>.value(
           value: taskProvider,
         ),
-
         ChangeNotifierProvider<SettingsService>.value(
           value: settingsService,
         ),
+
+        // 認証サービスを追加
+        Provider<AuthService>(
+          create: (_) => AuthService(),
+        ),
+
+        // SyncProviderは AuthService を使用するため、後に追加
         ChangeNotifierProvider(
-          create: (_) => SyncProvider(
-            authService,
+          create: (context) => SyncProvider(
+            Provider.of<AuthService>(context, listen: false),
             syncService,
             settingsService,
             networkConnectivity,

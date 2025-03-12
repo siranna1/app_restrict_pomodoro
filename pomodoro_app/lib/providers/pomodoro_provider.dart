@@ -56,8 +56,18 @@ class PomodoroProvider with ChangeNotifier {
   }
 
   // タイマーを開始
-  void startTimer(Task task) {
-    currentTask = task;
+  void startTimer(Task task) async {
+    if (task.id != null) {
+      final freshTask = await DatabaseHelper.instance.getTask(task.id!);
+      if (freshTask != null) {
+        currentTask = freshTask;
+        print('ポモドーロ開始: 最新のタスク情報を取得 - firebaseId: ${freshTask.firebaseId}');
+      } else {
+        currentTask = task;
+      }
+    } else {
+      currentTask = task;
+    }
     isRunning = true;
     isPaused = true;
     isBreak = false;
@@ -205,13 +215,13 @@ class PomodoroProvider with ChangeNotifier {
       // タスク ID が有効な場合のみデータベースに保存
       if (currentTask!.id != null) {
         await DatabaseHelper.instance.insertPomodoroSession(session);
-
+        String? id = currentTask!.firebaseId;
+        print("ファイアベースid $id");
         // タスクの完了ポモドーロ数を更新
         currentTask = currentTask!.copyWith(
           completedPomodoros: currentTask!.completedPomodoros + 1,
           updatedAt: DateTime.now(),
         );
-
         await DatabaseHelper.instance.updateTask(currentTask!);
 
         // 日次目標の達成状況を更新

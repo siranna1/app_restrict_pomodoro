@@ -1,7 +1,7 @@
 // models/pomodoro_session.dart - ポモドーロセッションモデル
 class PomodoroSession {
   final int? id;
-  final int taskId;
+  int taskId;
   final DateTime startTime;
   final DateTime endTime;
   final int durationMinutes;
@@ -13,6 +13,7 @@ class PomodoroSession {
   final String? mood; // セッション後の気分 (great, good, neutral, tired, frustrated)
   final bool isBreak; // 休憩セッションかどうか
   String? firebaseId;
+  String? firebaseTaskId;
 
   PomodoroSession({
     this.id,
@@ -27,6 +28,7 @@ class PomodoroSession {
     this.mood,
     this.isBreak = false,
     this.firebaseId,
+    this.firebaseTaskId,
   });
 
   // 時間帯を自動的に設定するファクトリコンストラクタ
@@ -141,7 +143,7 @@ class PomodoroSession {
 
   Map<String, dynamic> toFirebase() {
     return {
-      'taskId': taskId,
+      'taskId': firebaseTaskId,
       'startTime': startTime.toIso8601String(),
       'endTime': endTime.toIso8601String(),
       'durationMinutes': durationMinutes,
@@ -156,7 +158,7 @@ class PomodoroSession {
 
   factory PomodoroSession.fromFirebase(Map<String, dynamic> data) {
     return PomodoroSession(
-      taskId: data['taskId'],
+      taskId: 0, // 仮の値。あとで正しいタスクIDに更新する
       startTime: DateTime.parse(data['startTime']),
       endTime: DateTime.parse(data['endTime']),
       durationMinutes: data['durationMinutes'],
@@ -166,6 +168,7 @@ class PomodoroSession {
       interruptionCount: data['interruptionCount'],
       mood: data['mood'],
       isBreak: data['isBreak'],
+      firebaseTaskId: data['firebaseTaskId'],
     );
   }
 }

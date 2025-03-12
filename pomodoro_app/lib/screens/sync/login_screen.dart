@@ -1,0 +1,165 @@
+// screens/auth/login_screen.dart
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:pomodoro_app/services/firebase/auth_service.dart';
+
+class LoginScreen extends StatefulWidget {
+  @override
+  _LoginScreenState createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _isLogin = true; // true = ログイン, false = 登録
+  bool _isLoading = false;
+  String? _errorMessage;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final authService = Provider.of<AuthService>(context, listen: false);
+
+      if (_isLogin) {
+        // ログイン処理
+        await authService.signInWithEmailPassword(
+          _emailController.text.trim(),
+          _passwordController.text,
+        );
+      } else {
+        // 登録処理
+        await authService.registerWithEmailPassword(
+          _emailController.text.trim(),
+          _passwordController.text,
+        );
+      }
+
+      // 成功したらホーム画面に遷移
+      Navigator.of(context).pushReplacementNamed('/home');
+    } catch (e) {
+      setState(() {
+        _errorMessage = e.toString();
+      });
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(_isLogin ? 'ログイン' : 'アカウント登録'),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (_errorMessage != null)
+                Container(
+                  padding: EdgeInsets.all(8),
+                  color: Colors.red[100],
+                  child: Text(
+                    _errorMessage!,
+                    style: TextStyle(color: Colors.red[900]),
+                  ),
+                ),
+              TextFormField(
+                controller: _emailController,
+                decoration: InputDecoration(labelText: 'メールアドレス'),
+                keyboardType: TextInputType.emailAddress,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'メールアドレスを入力してください';
+                  }
+                  if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
+                      .hasMatch(value)) {
+                    return '正しいメールアドレスを入力してください';
+                  }
+                  return null;
+                },
+              ),
+              SizedBox(height: 16),
+              TextFormField(
+                controller: _passwordController,
+                decoration: InputDecoration(labelText: 'パスワード'),
+                obscureText: true,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'パスワードを入力してください';
+                  }
+                  if (value.length < 6) {
+                    return 'パスワードは6文字以上にしてください';
+                  }
+                  return null;
+                },
+              ),
+              SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: _isLoading ? null : _submit,
+                child: _isLoading
+                    ? CircularProgressIndicator()
+                    : Text(_isLogin ? 'ログイン' : '登録'),
+              ),
+              TextButton(
+                onPressed: () {
+                  setState(() {
+                    _isLogin = !_isLogin;
+                    _errorMessage = null;
+                  });
+                },
+                child: Text(_isLogin ? 'アカウントを作成する' : '既にアカウントをお持ちの方はこちら'),
+              ),
+              if (_isLogin)
+                TextButton(
+                  onPressed: () async {
+                    if (_emailController.text.isEmpty) {
+                      setState(() {
+                        _errorMessage = 'パスワードをリセットするにはメールアドレスを入力してください';
+                      });
+                      return;
+                    }
+
+                    try {
+                      final authService =
+                          Provider.of<AuthService>(context, listen: false);
+                      await authService
+                          .sendPasswordResetEmail(_emailController.text.trim());
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('パスワードリセットメールを送信しました')),
+                      );
+                    } catch (e) {
+                      setState(() {
+                        _errorMessage = e.toString();
+                      });
+                    }
+                  },
+                  child: Text('パスワードを忘れた場合'),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

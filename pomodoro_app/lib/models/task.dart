@@ -1,7 +1,7 @@
 // models/task.dart - タスクモデル
 class Task {
-  final int? id;
-  final String name;
+  int? id;
+  String name;
   final String category;
   final String description;
   final int estimatedPomodoros;

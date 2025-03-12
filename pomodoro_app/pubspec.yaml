@@ -57,7 +57,7 @@ dependencies:
   firebase_database: ^10.2.4
   firebase_auth: ^4.7.2
   connectivity_plus: ^4.0.2
-  workmanager: ^0.5.1
+  workmanager: ^0.5.2
   
 
 

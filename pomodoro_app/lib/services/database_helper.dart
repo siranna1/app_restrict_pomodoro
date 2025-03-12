@@ -58,10 +58,10 @@ class DatabaseHelper {
   Future<Database> _initDB(String filePath) async {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
-
+    print(path);
     return await openDatabase(
       path,
-      version: 3,
+      version: 7,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
     );
@@ -315,10 +315,181 @@ class DatabaseHelper {
         await db.execute(
             'ALTER TABLE app_usage_sessions ADD COLUMN firebaseId TEXT');
 
+        // ここに追加 ↓
+        // reward_pointsテーブルに同期フィールドを追加
+        await db
+            .execute('ALTER TABLE reward_points ADD COLUMN firebaseId TEXT');
+
+        // daily_goalsテーブルに同期フィールドを追加
+        await db.execute('ALTER TABLE daily_goals ADD COLUMN firebaseId TEXT');
+
         print('同期フィールドを追加しました');
       } catch (e) {
         print('同期フィールド追加エラー: $e');
       }
+    }
+    if (oldVersion < 5) {
+      // バージョン4から5へのアップグレード（同期フィールド拡張）
+      print('データベースをバージョン4から5にアップグレードします（同期フィールド拡張）');
+
+      try {
+        // reward_pointsテーブルとdaily_goalsテーブルにfirebaseIdカラムがなければ追加
+        var rewardPointsInfo =
+            await db.rawQuery("PRAGMA table_info(reward_points)");
+        List<String> rewardPointsColumns =
+            rewardPointsInfo.map((col) => col['name'] as String).toList();
+
+        var dailyGoalsInfo =
+            await db.rawQuery("PRAGMA table_info(daily_goals)");
+        List<String> dailyGoalsColumns =
+            dailyGoalsInfo.map((col) => col['name'] as String).toList();
+
+        // reward_pointsテーブルにfirebaseIdがなければ追加
+        if (!rewardPointsColumns.contains('firebaseId')) {
+          await db
+              .execute('ALTER TABLE reward_points ADD COLUMN firebaseId TEXT');
+          print('reward_pointsテーブルにfirebaseIdを追加しました');
+        }
+
+        // daily_goalsテーブルにfirebaseIdがなければ追加
+        if (!dailyGoalsColumns.contains('firebaseId')) {
+          await db
+              .execute('ALTER TABLE daily_goals ADD COLUMN firebaseId TEXT');
+          print('daily_goalsテーブルにfirebaseIdを追加しました');
+        }
+
+        // ポモドーロセッションテーブルにfirebaseTaskIdカラムを追加
+        var pomodoroSessionsInfo =
+            await db.rawQuery("PRAGMA table_info(pomodoro_sessions)");
+        List<String> pomodoroColumns =
+            pomodoroSessionsInfo.map((col) => col['name'] as String).toList();
+
+        if (!pomodoroColumns.contains('firebaseTaskId')) {
+          await db.execute(
+              'ALTER TABLE pomodoro_sessions ADD COLUMN firebaseTaskId TEXT');
+          print('pomodoro_sessionsテーブルにfirebaseTaskIdを追加しました');
+        }
+
+        print('同期フィールド拡張が完了しました');
+      } catch (e) {
+        print('同期フィールド拡張エラー: $e');
+      }
+    }
+
+    if (oldVersion < 6) {
+      // バージョン5から6へのアップグレード（ポイント同期フィールド追加）
+      print('データベースをバージョン5から6にアップグレードします（ポイント同期フィールド追加）');
+
+      try {
+        // reward_pointsテーブルにLastSync関連カラムを追加
+        var rewardPointsInfo =
+            await db.rawQuery("PRAGMA table_info(reward_points)");
+        List<String> rewardPointsColumns =
+            rewardPointsInfo.map((col) => col['name'] as String).toList();
+
+        if (!rewardPointsColumns.contains('lastSyncEarnedPoints')) {
+          await db.execute(
+              'ALTER TABLE reward_points ADD COLUMN lastSyncEarnedPoints INTEGER');
+          print('reward_pointsテーブルにlastSyncEarnedPointsを追加しました');
+        }
+
+        if (!rewardPointsColumns.contains('lastSyncUsedPoints')) {
+          await db.execute(
+              'ALTER TABLE reward_points ADD COLUMN lastSyncUsedPoints INTEGER');
+          print('reward_pointsテーブルにlastSyncUsedPointsを追加しました');
+        }
+
+        // 現在の値を同期値としても設定
+        await db.execute('''
+        UPDATE reward_points
+        SET lastSyncEarnedPoints = earnedPoints,
+            lastSyncUsedPoints = usedPoints
+      ''');
+
+        // app_usage_sessionsテーブルにアプリ情報カラムを追加
+        var appUsageInfo =
+            await db.rawQuery("PRAGMA table_info(app_usage_sessions)");
+        List<String> appUsageColumns =
+            appUsageInfo.map((col) => col['name'] as String).toList();
+
+        if (!appUsageColumns.contains('appName')) {
+          await db.execute(
+              'ALTER TABLE app_usage_sessions ADD COLUMN appName TEXT');
+        }
+
+        if (!appUsageColumns.contains('appPath')) {
+          await db.execute(
+              'ALTER TABLE app_usage_sessions ADD COLUMN appPath TEXT');
+        }
+
+        if (!appUsageColumns.contains('remoteAppId')) {
+          await db.execute(
+              'ALTER TABLE app_usage_sessions ADD COLUMN remoteAppId INTEGER');
+        }
+
+        // 既存のセッションデータにアプリ情報を追加
+        final sessions = await db.query('app_usage_sessions');
+        for (var session in sessions) {
+          final appId = session['appId'] as int;
+          final appInfo = await db.query(
+            'restricted_apps',
+            columns: ['name', 'executablePath'],
+            where: 'id = ?',
+            whereArgs: [appId],
+          );
+
+          if (appInfo.isNotEmpty) {
+            await db.update(
+              'app_usage_sessions',
+              {
+                'appName': appInfo.first['name'],
+                'appPath': appInfo.first['executablePath'],
+              },
+              where: 'id = ?',
+              whereArgs: [session['id']],
+            );
+          }
+        }
+
+        print('ポイント同期とアプリセッション機能拡張が完了しました');
+      } catch (e) {
+        print('ポイント同期とアプリセッション機能拡張エラー: $e');
+      }
+    }
+    if (oldVersion < 7) {
+      await _upgradeDBToV7(db);
+    }
+  }
+
+  Future<void> _upgradeDBToV7(Database db) async {
+    print('ポイント同期カラム追加中...');
+
+    try {
+      // reward_pointsテーブルに同期用カラムを追加
+      var tableInfo = await db.rawQuery("PRAGMA table_info(reward_points)");
+      List<String> existingColumns =
+          tableInfo.map((col) => col['name'] as String).toList();
+
+      if (!existingColumns.contains('lastSyncEarnedPoints')) {
+        await db.execute(
+            'ALTER TABLE reward_points ADD COLUMN lastSyncEarnedPoints INTEGER');
+      }
+
+      if (!existingColumns.contains('lastSyncUsedPoints')) {
+        await db.execute(
+            'ALTER TABLE reward_points ADD COLUMN lastSyncUsedPoints INTEGER');
+      }
+
+      // 現在の値を同期値としても設定
+      await db.execute('''
+      UPDATE reward_points
+      SET lastSyncEarnedPoints = earnedPoints,
+          lastSyncUsedPoints = usedPoints
+    ''');
+
+      print('ポイント同期カラム追加完了');
+    } catch (e) {
+      print('ポイント同期カラム追加エラー: $e');
     }
   }
 
@@ -1076,6 +1247,135 @@ class DatabaseHelper {
 
     return result;
   }
+  // DatabaseHelper クラスに追加するメソッド
+
+// すべての制限アプリを取得
+  Future<List<RestrictedApp>> getRestrictedApps() async {
+    final db = await database;
+    final results = await db.query('restricted_apps');
+    return results.map((map) => RestrictedApp.fromMap(map)).toList();
+  }
+
+// 名前で制限アプリを検索
+  Future<List<RestrictedApp>> getRestrictedAppByName(String name) async {
+    final db = await database;
+    final results = await db.query(
+      'restricted_apps',
+      where: 'name = ?',
+      whereArgs: [name],
+    );
+    return results.map((map) => RestrictedApp.fromMap(map)).toList();
+  }
+
+// 名前とパスで制限アプリを検索
+  Future<RestrictedApp?> getRestrictedAppByNameAndPath(
+      String name, String executablePath) async {
+    final db = await database;
+    final results = await db.query(
+      'restricted_apps',
+      where: 'name = ? AND executablePath = ?',
+      whereArgs: [name, executablePath],
+    );
+
+    if (results.isNotEmpty) {
+      return RestrictedApp.fromMap(results.first);
+    }
+    return null;
+  }
+
+// IDで制限アプリを取得
+  Future<RestrictedApp?> getRestrictedApp(int id) async {
+    final db = await database;
+    final results = await db.query(
+      'restricted_apps',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+
+    if (results.isNotEmpty) {
+      return RestrictedApp.fromMap(results.first);
+    }
+    return null;
+  }
+
+// 制限アプリに関する統計情報を取得（使用時間、ポイント消費など）
+  Future<Map<String, dynamic>> getAppUsageStatistics(int appId,
+      {DateTime? startDate, DateTime? endDate}) async {
+    final db = await database;
+
+    final now = DateTime.now();
+    final start = startDate ?? now.subtract(const Duration(days: 30));
+    final end = endDate ?? now;
+
+    // 指定された期間内のアプリ使用セッションを取得
+    final results = await db.rawQuery('''
+    SELECT 
+      COUNT(*) as sessionCount,
+      SUM((strftime('%s', endTime) - strftime('%s', startTime)) / 60) as totalMinutes,
+      SUM(pointsSpent) as totalPointsSpent,
+      MAX(endTime) as lastUsed
+    FROM app_usage_sessions
+    WHERE appId = ? 
+      AND startTime BETWEEN ? AND ?
+  ''', [appId, start.toIso8601String(), end.toIso8601String()]);
+
+    if (results.isEmpty) {
+      return {
+        'sessionCount': 0,
+        'totalMinutes': 0,
+        'totalPointsSpent': 0,
+        'lastUsed': null,
+      };
+    }
+
+    final data = results.first;
+
+    return {
+      'sessionCount': data['sessionCount'] ?? 0,
+      'totalMinutes': data['totalMinutes'] ?? 0,
+      'totalPointsSpent': data['totalPointsSpent'] ?? 0,
+      'lastUsed': data['lastUsed'] != null
+          ? DateTime.parse(data['lastUsed'] as String)
+          : null,
+    };
+  }
+
+// 制限アプリの一覧を、最近使用したものから順に取得
+  Future<List<Map<String, dynamic>>> getRestrictedAppsWithUsage() async {
+    final db = await database;
+
+    return await db.rawQuery('''
+    SELECT 
+      r.*,
+      MAX(s.endTime) as lastUsed,
+      COUNT(s.id) as usageCount
+    FROM restricted_apps r
+    LEFT JOIN app_usage_sessions s ON r.id = s.appId
+    GROUP BY r.id
+    ORDER BY lastUsed DESC NULLS LAST
+  ''');
+  }
+
+// 特定の日のアプリ使用時間を取得
+  Future<int> getAppUsageMinutesToday(int appId) async {
+    final db = await database;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day).toIso8601String();
+
+    final results = await db.rawQuery('''
+    SELECT 
+      SUM((strftime('%s', endTime) - strftime('%s', startTime)) / 60) as minutesToday
+    FROM app_usage_sessions
+    WHERE appId = ? 
+      AND date(startTime) = date(?)
+  ''', [appId, today]);
+
+    if (results.isEmpty || results.first['minutesToday'] == null) {
+      return 0;
+    }
+
+    return (results.first['minutesToday'] as num).round();
+  }
 
   // 特定の時間以降に変更されたタスクを取得
   Future<List<Task>> getTasksChangedSince(DateTime? timestamp) async {
@@ -1107,15 +1407,23 @@ class DatabaseHelper {
       return getPomodoroSessions();
     }
 
-    final List<Map<String, dynamic>> maps = await db.query(
-      'pomodoro_sessions',
-      where: 'endTime > ?',
-      whereArgs: [timestamp.toIso8601String()],
-    );
+    try {
+      final List<Map<String, dynamic>> maps = await db.query(
+        'pomodoro_sessions',
+        where: 'endTime > ?',
+        whereArgs: [timestamp.toIso8601String()],
+      );
 
-    return List.generate(maps.length, (i) {
-      return PomodoroSession.fromMap(maps[i]);
-    });
+      final sessions = List.generate(maps.length, (i) {
+        return PomodoroSession.fromMap(maps[i]);
+      });
+
+      print('変更されたセッション: ${sessions.length}件');
+      return sessions;
+    } catch (e) {
+      print('セッション取得エラー: $e');
+      return [];
+    }
   }
 
 // 特定の時間以降に変更されたアプリ使用セッションを取得
@@ -1161,6 +1469,17 @@ class DatabaseHelper {
       where: 'id = ?',
       whereArgs: [session.id],
     );
+  }
+
+  Future<Task?> getTaskByName(String name) async {
+    final db = await database;
+    final results = await db
+        .query('tasks', where: 'name = ? AND isDeleted = 0', whereArgs: [name]);
+
+    if (results.isNotEmpty) {
+      return Task.fromMap(results.first);
+    }
+    return null;
   }
 
   // Firebase IDでタスクを検索

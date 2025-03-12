@@ -1,4 +1,4 @@
-// sync_provider.dart
+// providers/sync_provider.dart を修正
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:pomodoro_app/services/firebase/auth_service.dart';
@@ -6,6 +6,8 @@ import 'package:pomodoro_app/services/firebase/sync_service.dart';
 import 'package:pomodoro_app/services/settings_service.dart';
 import 'package:pomodoro_app/services/network_connectivity.dart';
 import 'package:pomodoro_app/services/background_sync_services.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:pomodoro_app/providers/pomodoro_provider.dart';
 
 class SyncProvider with ChangeNotifier {
   final AuthService _authService;
@@ -28,22 +30,29 @@ class SyncProvider with ChangeNotifier {
   ) {
     // 初期化時に自動同期を設定
     _setupAutoSync();
+    // 認証状態変更リスナーを追加
+    FirebaseAuth.instance.authStateChanges().listen((User? user) {
+      // 認証状態が変わったらリスナーに通知
+      notifyListeners();
+    });
   }
 
   bool get isSyncing => _isSyncing;
   DateTime? get lastSyncTime => _lastSyncTime;
   String? get error => _error;
+  bool get isAuthenticated => _authService.userId != null;
+  String? get userEmail => FirebaseAuth.instance.currentUser?.email;
 
   // 同期処理
-  Future<void> sync() async {
-    if (_isSyncing) return;
+  Future<bool> sync() async {
+    if (_isSyncing) return false;
 
     // 接続チェック
     final isConnected = await _networkConnectivity.isConnected();
     if (!isConnected) {
       _error = "ネットワーク接続がありません";
       notifyListeners();
-      return;
+      return false;
     }
 
     _isSyncing = true;
@@ -54,21 +63,23 @@ class SyncProvider with ChangeNotifier {
       // 認証確認
       String? userId = _authService.userId;
       if (userId == null) {
-        userId = await _authService.signInAnonymously();
+        _error = "認証が必要です";
+        _isSyncing = false;
+        notifyListeners();
+        return false;
       }
 
-      if (userId != null) {
-        // 全データ同期
-        await _syncService.syncAll(userId);
-        _lastSyncTime = DateTime.now();
-      } else {
-        _error = "認証に失敗しました";
-      }
-    } catch (e) {
-      _error = "同期エラー: $e";
-    } finally {
+      // 全データ同期
+      await _syncService.syncAll(userId);
+      _lastSyncTime = DateTime.now();
       _isSyncing = false;
       notifyListeners();
+      return true;
+    } catch (e) {
+      _error = "同期エラー: $e";
+      _isSyncing = false;
+      notifyListeners();
+      return false;
     }
   }
 
@@ -81,7 +92,11 @@ class SyncProvider with ChangeNotifier {
     if (_settingsService.autoSyncEnabled) {
       final syncInterval =
           Duration(minutes: _settingsService.autoSyncIntervalMinutes);
-      _syncTimer = Timer.periodic(syncInterval, (_) => sync());
+      _syncTimer = Timer.periodic(syncInterval, (_) {
+        if (isAuthenticated) {
+          sync();
+        }
+      });
 
       // バックグラウンドサービスの設定
       _backgroundSyncService
@@ -102,6 +117,7 @@ class SyncProvider with ChangeNotifier {
   void toggleAutoSync(bool enabled) {
     _settingsService.setAutoSyncEnabled(enabled);
     _setupAutoSync();
+    notifyListeners();
   }
 
   @override

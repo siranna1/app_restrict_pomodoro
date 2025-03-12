@@ -6,9 +6,10 @@ class RestrictedApp {
   final int allowedMinutesPerDay;
   final bool isRestricted;
   final int? requiredPomodorosToUnlock;
-
   final int minutesPerPoint;
   final DateTime? currentSessionEnd;
+  final String? firebaseId; // Firebase同期用のID
+
   RestrictedApp({
     this.id,
     required this.name,
@@ -18,6 +19,7 @@ class RestrictedApp {
     this.requiredPomodorosToUnlock, // 省略可能
     this.minutesPerPoint = 30, // デフォルト値
     this.currentSessionEnd,
+    this.firebaseId, // Firebase同期用のID
   });
 
   // 1時間あたりのポイントコストをminutesPerPointから計算
@@ -47,6 +49,7 @@ class RestrictedApp {
       'pointCostPerHour': pointCostPerHour,
       'minutesPerPoint': minutesPerPoint,
       'currentSessionEnd': currentSessionEnd?.toIso8601String(),
+      'firebaseId': firebaseId, // Firebase同期用のID
     };
   }
 
@@ -62,6 +65,34 @@ class RestrictedApp {
       currentSessionEnd: map['currentSessionEnd'] != null
           ? DateTime.parse(map['currentSessionEnd'])
           : null,
+      firebaseId: map['firebaseId'], // Firebase同期用のID
+    );
+  }
+
+  // Firebase用のマップデータを返すメソッド
+  Map<String, dynamic> toFirebase() {
+    return {
+      'name': name,
+      'executablePath': executablePath,
+      'allowedMinutesPerDay': allowedMinutesPerDay,
+      'isRestricted': isRestricted,
+      'requiredPomodorosToUnlock': requiredPomodorosToUnlock,
+      'minutesPerPoint': minutesPerPoint,
+      // currentSessionEndはデバイス固有の情報なのでアップロードしない
+      // 'currentSessionEnd': currentSessionEnd?.toIso8601String(),
+    };
+  }
+
+  // Firebaseからのデータを元にインスタンスを作成
+  factory RestrictedApp.fromFirebase(Map<String, dynamic> data) {
+    return RestrictedApp(
+      name: data['name'],
+      executablePath: data['executablePath'],
+      allowedMinutesPerDay: data['allowedMinutesPerDay'],
+      isRestricted: data['isRestricted'],
+      requiredPomodorosToUnlock: data['requiredPomodorosToUnlock'],
+      minutesPerPoint: data['minutesPerPoint'] ?? 30,
+      // currentSessionEndはアップロードされていないのでnull
     );
   }
 
@@ -74,6 +105,7 @@ class RestrictedApp {
     int? requiredPomodorosToUnlock,
     int? minutesPerPoint,
     DateTime? currentSessionEnd,
+    String? firebaseId, // Firebase同期用のID
   }) {
     return RestrictedApp(
       id: id ?? this.id,
@@ -85,6 +117,7 @@ class RestrictedApp {
           requiredPomodorosToUnlock ?? this.requiredPomodorosToUnlock,
       minutesPerPoint: minutesPerPoint ?? this.minutesPerPoint,
       currentSessionEnd: currentSessionEnd ?? this.currentSessionEnd,
+      firebaseId: firebaseId ?? this.firebaseId, // Firebase同期用のID
     );
   }
 }
