@@ -43,6 +43,19 @@ class SyncProvider with ChangeNotifier {
   bool get isAuthenticated => _authService.userId != null;
   String? get userEmail => FirebaseAuth.instance.currentUser?.email;
 
+  // 同期完了時のリスナーリスト
+  final List<Function()> _syncCompletedListeners = [];
+
+  // リスナー登録メソッド
+  void addSyncCompletedListener(Function() listener) {
+    _syncCompletedListeners.add(listener);
+  }
+
+  // リスナー削除メソッド
+  void removeSyncCompletedListener(Function() listener) {
+    _syncCompletedListeners.remove(listener);
+  }
+
   // 同期処理
   Future<bool> sync() async {
     if (_isSyncing) return false;
@@ -73,6 +86,14 @@ class SyncProvider with ChangeNotifier {
       await _syncService.syncAll(userId);
       _lastSyncTime = DateTime.now();
       _isSyncing = false;
+      // 同期完了をリスナーに通知
+      for (var listener in _syncCompletedListeners) {
+        try {
+          listener();
+        } catch (e) {
+          print('同期完了リスナーエラー: $e');
+        }
+      }
       notifyListeners();
       return true;
     } catch (e) {
@@ -123,6 +144,7 @@ class SyncProvider with ChangeNotifier {
   @override
   void dispose() {
     _syncTimer?.cancel();
+    _syncCompletedListeners.clear();
     super.dispose();
   }
 }

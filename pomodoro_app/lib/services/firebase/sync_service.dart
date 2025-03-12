@@ -7,6 +7,7 @@ import 'package:pomodoro_app/models/pomodoro_session.dart';
 import 'package:pomodoro_app/models/reward_point.dart';
 import 'package:pomodoro_app/models/app_usage_session.dart';
 import 'package:pomodoro_app/models/restricted_app.dart';
+import 'dart:math';
 
 class SyncService {
   final DatabaseReference _database = FirebaseDatabase.instance.ref();
@@ -24,7 +25,8 @@ class SyncService {
       final lastSyncTime = await _settingsService.getLastSyncTime('tasks');
 
       // ローカルタスクの取得
-      final localTasks = await _dbHelper.getTasksChangedSince(lastSyncTime);
+      //final localTasks = await _dbHelper.getTasksChangedSince(lastSyncTime);
+      final localTasks = await _dbHelper.getTasks();
 
       // ローカルのタスク名をマップ化して高速検索できるようにする
       final localTaskNameMap = <String, Task>{};
@@ -83,7 +85,7 @@ class SyncService {
       for (var entry in remoteTasks.entries) {
         final key = entry.key;
         final taskData = entry.value;
-
+        print("リモートキー $key");
         // FirebaseIDでの存在チェック
         final existsByFirebaseId =
             localTasks.any((task) => task.firebaseId == key);
@@ -134,9 +136,28 @@ class SyncService {
       final lastSyncTime =
           await _settingsService.getLastSyncTime('pomodoro_sessions');
 
-      // ローカルセッションの取得
-      final localSessions =
+      // 1. ローカルセッションをすべて取得 (変更されたものだけではなく)
+      final allLocalSessions = await _dbHelper.getPomodoroSessions();
+
+      // 2. 前回の同期以降に変更されたセッションのみを取得（アップロード用）
+      final changedLocalSessions =
           await _dbHelper.getSessionsChangedSince(lastSyncTime);
+
+      // 3. ローカルセッションのFirebaseID一覧を作成（既存セッションチェック用）
+      final localSessionFirebaseIds = <String?>{};
+      for (var session in allLocalSessions) {
+        if (session.firebaseId != null) {
+          localSessionFirebaseIds.add(session.firebaseId);
+        }
+      }
+
+      // 4. startTime + endTimeの複合キーをマップとして保存（重複検出用）
+      final sessionTimeKeys = <String>{};
+      for (var session in allLocalSessions) {
+        final timeKey =
+            '${session.startTime.toIso8601String()}_${session.endTime.toIso8601String()}';
+        sessionTimeKeys.add(timeKey);
+      }
 
       // タスクとFirebase IDのマッピングを取得
       final taskMappings = await _getTaskFirebaseIdMappings();
@@ -160,8 +181,8 @@ class SyncService {
         });
       }
 
-      // リモートに存在しないローカルセッションをアップロード
-      for (var session in localSessions) {
+      // リモートに存在しないローカルセッションをアップロード（変更されたもののみ）
+      for (var session in changedLocalSessions) {
         // セッションに関連するタスクのFirebase IDを取得
         final taskId = session.taskId;
         String? firebaseTaskId = taskMappings[taskId];
@@ -192,30 +213,46 @@ class SyncService {
       for (var entry in remoteSessions.entries) {
         final key = entry.key;
         final sessionData = entry.value;
-        final exists =
-            localSessions.any((session) => session.firebaseId == key);
 
-        if (!exists) {
-          final session = PomodoroSession.fromFirebase(sessionData);
-          session.firebaseId = key;
+        // 1. すでにfirebaseIdでマッピングされているセッションはスキップ
+        if (localSessionFirebaseIds.contains(key)) {
+          continue;
+        }
 
-          // FirebaseタスクIDからローカルタスクIDをマッピング
-          final firebaseTaskId = sessionData['firebaseTaskId'];
-          if (firebaseTaskId != null) {
-            final localTaskId =
-                await _getLocalTaskIdFromFirebaseId(firebaseTaskId);
-            if (localTaskId != null) {
-              session.taskId = localTaskId;
-              session.firebaseTaskId = firebaseTaskId;
+        // 2. 時間による重複検出 - 開始時間と終了時間が一致するセッションはスキップ
+        final startTime = DateTime.parse(sessionData['startTime']);
+        final endTime = DateTime.parse(sessionData['endTime']);
+        final timeKey =
+            '${startTime.toIso8601String()}_${endTime.toIso8601String()}';
 
-              final id = await _dbHelper.insertPomodoroSession(session);
-              print('新しいリモートセッションを追加: $id');
-            } else {
-              print('警告: リモートセッションに関連するローカルタスクが見つかりません');
-            }
+        //if (sessionTimeKeys.contains(timeKey)) {
+        //  print('重複セッションをスキップ: $timeKey');
+        //  continue;
+        //}
+
+        // 新しいセッションとしてインポート
+        final session = PomodoroSession.fromFirebase(sessionData);
+        session.firebaseId = key;
+
+        // FirebaseタスクIDからローカルタスクIDをマッピング
+        final firebaseTaskId = sessionData['firebaseTaskId'];
+        if (firebaseTaskId != null) {
+          final localTaskId =
+              await _getLocalTaskIdFromFirebaseId(firebaseTaskId);
+          if (localTaskId != null) {
+            session.taskId = localTaskId;
+            session.firebaseTaskId = firebaseTaskId;
+
+            final id = await _dbHelper.insertPomodoroSession(session);
+            print('新しいリモートセッションを追加: $id');
+
+            // セッション追加後にセッション時間キーセットに追加（同じセッションが複数回ダウンロードされるのを防ぐ）
+            sessionTimeKeys.add(timeKey);
           } else {
-            print('警告: リモートセッションにfirebaseTaskIdが含まれていません');
+            print('警告: リモートセッションに関連するローカルタスクが見つかりません');
           }
+        } else {
+          print('警告: リモートセッションにfirebaseTaskIdが含まれていません');
         }
       }
 
@@ -366,7 +403,7 @@ class SyncService {
             // 新しいアプリとしてインポート
             final app = RestrictedApp.fromFirebase(appData);
             final updatedApp = app.copyWith(firebaseId: key);
-            await _dbHelper.insertRestrictedApp(updatedApp);
+            //await _dbHelper.insertRestrictedApp(updatedApp);
             print('新しいリモート制限アプリを追加: ${app.name}');
           } else if (existingApp.firebaseId == null) {
             // 既存のアプリにFirebase IDを関連付け
@@ -392,6 +429,8 @@ class SyncService {
 
       // ローカルポイント取得
       final localPoints = await _dbHelper.getRewardPoints();
+      print(
+          '同期前のローカルポイント: 獲得=${localPoints.earnedPoints}, 使用=${localPoints.usedPoints}, 前回同期獲得=${localPoints.lastSyncEarnedPoints}, 前回同期使用=${localPoints.lastSyncUsedPoints}');
 
       // リモートポイント取得
       final event = await pointsRef.once();
@@ -404,20 +443,58 @@ class SyncService {
         ));
 
         final remotePoints = RewardPoint.fromFirebase(remoteMap);
+        print(
+            'リモートポイント: 獲得=${remotePoints.earnedPoints}, 使用=${remotePoints.usedPoints}, 前回同期獲得=${remotePoints.lastSyncEarnedPoints}, 前回同期使用=${remotePoints.lastSyncUsedPoints}');
 
-        // 増分同期ロジックを使用
-        final mergedPoints = localPoints.mergeWithRemote(remotePoints);
+        // 増分計算: 両方が変更されている場合の正しい処理
+        final localEarnedDelta = localPoints.lastSyncEarnedPoints != null
+            ? localPoints.earnedPoints - localPoints.lastSyncEarnedPoints!
+            : 0;
+        final localUsedDelta = localPoints.lastSyncUsedPoints != null
+            ? localPoints.usedPoints - localPoints.lastSyncUsedPoints!
+            : 0;
 
-        // マージした結果をローカルに保存
+        final remoteEarnedDelta = remotePoints.lastSyncEarnedPoints != null
+            ? remotePoints.earnedPoints - remotePoints.lastSyncEarnedPoints!
+            : 0;
+        final remoteUsedDelta = remotePoints.lastSyncUsedPoints != null
+            ? remotePoints.usedPoints - remotePoints.lastSyncUsedPoints!
+            : 0;
+
+        print('ローカル変化量: 獲得=$localEarnedDelta, 使用=$localUsedDelta');
+        print('リモート変化量: 獲得=$remoteEarnedDelta, 使用=$remoteUsedDelta');
+
+        // 新しい合計を計算
+        final baseEarnedPoints = max(localPoints.lastSyncEarnedPoints ?? 0,
+            remotePoints.lastSyncEarnedPoints ?? 0);
+        final baseUsedPoints = max(localPoints.lastSyncUsedPoints ?? 0,
+            remotePoints.lastSyncUsedPoints ?? 0);
+
+        // 新しいポイント合計 = 基準値 + ローカル増分 + リモート増分
+        final newEarnedPoints =
+            baseEarnedPoints + localEarnedDelta + remoteEarnedDelta;
+        final newUsedPoints = baseUsedPoints + localUsedDelta + remoteUsedDelta;
+
+        print('同期後のポイント: 獲得=$newEarnedPoints, 使用=$newUsedPoints');
+
+        // 更新したポイントオブジェクトを作成
+        final mergedPoints = RewardPoint(
+          id: localPoints.id,
+          earnedPoints: newEarnedPoints,
+          usedPoints: newUsedPoints,
+          lastUpdated: DateTime.now(),
+          firebaseId: localPoints.firebaseId,
+          lastSyncEarnedPoints: newEarnedPoints, // 同期完了時点の値を記録
+          lastSyncUsedPoints: newUsedPoints, // 同期完了時点の値を記録
+        );
+
+        // ローカルとリモートの両方を更新
         await _dbHelper.updateRewardPoints(mergedPoints);
-
-        // マージした結果をリモートに保存
         await pointsRef.set(mergedPoints.toFirebase());
 
-        print('ポイントデータを増分同期しました');
+        print('ポイントデータを増分同期しました: 獲得=$newEarnedPoints, 使用=$newUsedPoints');
       } else {
-        // リモートにデータがない場合、アップロード
-        // 前回同期値を現在の値に設定
+        // リモートにデータがない場合、初期アップロード
         final initialPoints = localPoints.copyWith(
           lastSyncEarnedPoints: localPoints.earnedPoints,
           lastSyncUsedPoints: localPoints.usedPoints,
@@ -426,7 +503,8 @@ class SyncService {
         await pointsRef.set(initialPoints.toFirebase());
         await _dbHelper.updateRewardPoints(initialPoints);
 
-        print('初期ポイントデータをアップロード');
+        print(
+            '初期ポイントデータをアップロード: 獲得=${initialPoints.earnedPoints}, 使用=${initialPoints.usedPoints}');
       }
 
       // 同期タイムスタンプを更新
@@ -583,6 +661,7 @@ class SyncService {
 
       // 4. 補助データを同期
       await syncRewardPoints(userId);
+      await syncAppUsageSessions(userId);
     } catch (e) {
       print('データ同期エラー: $e');
       rethrow;

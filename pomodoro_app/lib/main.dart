@@ -143,6 +143,16 @@ void main() async {
             backgroundSyncService,
           ),
         ),
+        ChangeNotifierProvider(
+          create: (context) => TaskProvider(
+            syncProvider: Provider.of<SyncProvider>(context, listen: false),
+          ),
+        ),
+        ChangeNotifierProvider(
+          create: (context) => AppRestrictionProvider(
+            syncProvider: Provider.of<SyncProvider>(context, listen: false),
+          ),
+        ),
       ],
       child: MyApp(),
     ),

@@ -124,7 +124,9 @@ class DatabaseHelper {
       earnedPoints INTEGER NOT NULL,
       usedPoints INTEGER NOT NULL,
       lastUpdated TEXT NOT NULL,
-      firebaseId TEXT
+      firebaseId TEXT,
+      lastSyncEarnedPoints INTEGER,
+      lastSyncUsedPoints INTEGER
     )
   ''');
 
@@ -136,6 +138,9 @@ class DatabaseHelper {
       endTime TEXT NOT NULL,
       pointsSpent INTEGER NOT NULL,
       firebaseId TEXT,
+      appName TEXT,
+      appPath TEXT,
+      remoteAppId TEXT,
       FOREIGN KEY (appId) REFERENCES restricted_apps (id) ON DELETE CASCADE
     )
   ''');
