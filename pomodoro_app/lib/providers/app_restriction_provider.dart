@@ -56,7 +56,7 @@ class AppRestrictionProvider with ChangeNotifier {
     _initializeController();
     _loadRestrictedApps();
     _loadRewardPoints();
-    _loadMonitoringState();
+    loadMonitoringState();
     _checkUnlockExpirations();
     initializeBackgroundServices();
     _startUnlockExpirationChecker();
@@ -202,7 +202,7 @@ class AppRestrictionProvider with ChangeNotifier {
   }
 
   // 監視状態を SharedPreferences から読み込む
-  Future<void> _loadMonitoringState() async {
+  Future<void> loadMonitoringState() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final savedState = prefs.getBool('app_monitoring_enabled') ?? false;
@@ -210,6 +210,7 @@ class AppRestrictionProvider with ChangeNotifier {
       // 保存されていた状態が true の場合のみ監視を開始
       if (savedState) {
         _windowsAppController.startMonitoring();
+        _startAndroidMonitoringService();
         isMonitoring = true;
         notifyListeners();
       }
@@ -223,6 +224,7 @@ class AppRestrictionProvider with ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('app_monitoring_enabled', enabled);
+      //print(prefs.getBool('app_monitoring_enabled'));
     } catch (e) {
       print('監視状態の保存エラー: $e');
     }
@@ -273,7 +275,7 @@ class AppRestrictionProvider with ChangeNotifier {
   // 監視を停止
   void stopMonitoring() async {
     final platformUtils = PlatformUtils();
-
+    print("アプリ監視を停止しました");
     if (platformUtils.isWindows) {
       _windowsAppController.stopMonitoring();
     } else if (platformUtils.isAndroid) {

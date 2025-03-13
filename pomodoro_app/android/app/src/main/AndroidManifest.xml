@@ -12,6 +12,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+<<<<<<< HEAD
     <!-- インターネット接続のパーミッション -->
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- ネットワーク状態のパーミッション -->
@@ -19,8 +20,13 @@
     <!-- バックグラウンド処理のパーミッション -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+=======
+    <!-- 通知に関する権限-->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+>>>>>>> main
 
     <application
+        android:enableOnBackInvokedCallback="true"
         android:label="pomodoro_app"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
