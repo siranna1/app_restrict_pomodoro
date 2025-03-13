@@ -170,7 +170,7 @@ class MyApp extends StatelessWidget {
     return AppLifecycleManager(
       onAppResume: () {
         // アプリ再開時に同期を実行
-        Provider.of<SyncProvider>(context, listen: false).sync();
+        //Provider.of<SyncProvider>(context, listen: false).sync();
       },
       onAppPause: () {
         // アプリ停止時の処理（必要に応じて）

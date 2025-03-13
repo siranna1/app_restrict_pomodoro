@@ -8,13 +8,10 @@ import '../providers/app_restriction_provider.dart';
 import 'ticktick_sync_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/settings_service.dart';
-<<<<<<< HEAD
 import '../providers/sync_provider.dart';
 import 'package:intl/intl.dart';
 import 'sync/sync_setting_screen.dart';
-=======
 import '../services/notification_service.dart';
->>>>>>> main
 
 class SettingsScreen extends StatefulWidget {
   final String? initialTab;
