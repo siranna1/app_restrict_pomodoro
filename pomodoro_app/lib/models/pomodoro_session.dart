@@ -1,7 +1,7 @@
 // models/pomodoro_session.dart - ポモドーロセッションモデル
 class PomodoroSession {
   final int? id;
-  final int taskId;
+  int taskId;
   final DateTime startTime;
   final DateTime endTime;
   final int durationMinutes;
@@ -12,6 +12,8 @@ class PomodoroSession {
   final int interruptionCount; // 中断・邪魔が入った回数
   final String? mood; // セッション後の気分 (great, good, neutral, tired, frustrated)
   final bool isBreak; // 休憩セッションかどうか
+  String? firebaseId;
+  String? firebaseTaskId;
 
   PomodoroSession({
     this.id,
@@ -25,6 +27,8 @@ class PomodoroSession {
     this.interruptionCount = 0,
     this.mood,
     this.isBreak = false,
+    this.firebaseId,
+    this.firebaseTaskId,
   });
 
   // 時間帯を自動的に設定するファクトリコンストラクタ
@@ -86,6 +90,7 @@ class PomodoroSession {
       'interruptionCount': interruptionCount,
       'mood': mood,
       'isBreak': isBreak ? 1 : 0,
+      'firebaseId': firebaseId,
     };
   }
 
@@ -102,6 +107,7 @@ class PomodoroSession {
       interruptionCount: map['interruptionCount'] ?? 0,
       mood: map['mood'],
       isBreak: map['isBreak'] == 1,
+      firebaseId: map['firebaseId'],
     );
   }
   // コピーメソッド
@@ -117,6 +123,7 @@ class PomodoroSession {
     int? interruptionCount,
     String? mood,
     bool? isBreak,
+    String? firebaseId,
   }) {
     return PomodoroSession(
       id: id ?? this.id,
@@ -130,6 +137,38 @@ class PomodoroSession {
       interruptionCount: interruptionCount ?? this.interruptionCount,
       mood: mood ?? this.mood,
       isBreak: isBreak ?? this.isBreak,
+      firebaseId: firebaseId ?? this.firebaseId,
+    );
+  }
+
+  Map<String, dynamic> toFirebase() {
+    return {
+      'taskId': firebaseTaskId,
+      'startTime': startTime.toIso8601String(),
+      'endTime': endTime.toIso8601String(),
+      'durationMinutes': durationMinutes,
+      'completed': completed,
+      'focusScore': focusScore,
+      'timeOfDay': timeOfDay,
+      'interruptionCount': interruptionCount,
+      'mood': mood,
+      'isBreak': isBreak,
+    };
+  }
+
+  factory PomodoroSession.fromFirebase(Map<String, dynamic> data) {
+    return PomodoroSession(
+      taskId: 0, // 仮の値。あとで正しいタスクIDに更新する
+      startTime: DateTime.parse(data['startTime']),
+      endTime: DateTime.parse(data['endTime']),
+      durationMinutes: data['durationMinutes'],
+      completed: data['completed'],
+      focusScore: data['focusScore'].toDouble(),
+      timeOfDay: data['timeOfDay'],
+      interruptionCount: data['interruptionCount'],
+      mood: data['mood'],
+      isBreak: data['isBreak'],
+      firebaseTaskId: data['firebaseTaskId'],
     );
   }
 }

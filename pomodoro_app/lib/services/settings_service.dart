@@ -12,11 +12,34 @@ class SettingsService with ChangeNotifier {
   factory SettingsService() => _instance;
 
   // SharedPreferencesインスタンス
-  SharedPreferences? _prefs;
+  late SharedPreferences _prefs;
   bool _initialized = false;
 
   // プライベートコンストラクタ
   SettingsService._internal();
+
+  // 自動同期設定
+  static const String _autoSyncEnabledKey = 'autoSyncEnabled';
+  static const String _autoSyncIntervalKey = 'autoSyncIntervalMinutes';
+  static const String _lastSyncTimePrefix = 'lastSyncTime_';
+
+  // デフォルト設定
+  static const bool _defaultAutoSyncEnabled = true;
+  static const int _defaultAutoSyncInterval = 5; // 5分
+
+  // エラー修正: null安全対応
+  bool get autoSyncEnabled =>
+      _prefs.getBool(_autoSyncEnabledKey) ?? _defaultAutoSyncEnabled;
+  int get autoSyncIntervalMinutes =>
+      _prefs.getInt(_autoSyncIntervalKey) ?? _defaultAutoSyncInterval;
+
+  Future<void> setAutoSyncEnabled(bool enabled) async {
+    await _prefs.setBool(_autoSyncEnabledKey, enabled);
+  }
+
+  Future<void> setAutoSyncInterval(int minutes) async {
+    await _prefs.setInt(_autoSyncIntervalKey, minutes);
+  }
 
   /// サービスを初期化し、保存された設定を読み込みます
   Future<void> init() async {
@@ -102,6 +125,23 @@ class SettingsService with ChangeNotifier {
     await _ensureInitialized();
     await _prefs?.setInt(_Keys.dailyTargetPomodoros, count);
     notifyListeners();
+  }
+
+  // 最後の同期時間の取得と設定（エラー修正用に追加）
+  Future<DateTime?> getLastSyncTime(String dataType) async {
+    final key = _lastSyncTimePrefix + dataType;
+    final timestamp = _prefs.getInt(key);
+
+    if (timestamp == null) {
+      return null;
+    }
+
+    return DateTime.fromMillisecondsSinceEpoch(timestamp);
+  }
+
+  Future<void> setLastSyncTime(String dataType, DateTime time) async {
+    final key = _lastSyncTimePrefix + dataType;
+    await _prefs.setInt(key, time.millisecondsSinceEpoch);
   }
 
   // 通知と音声設定 --------------------------------------------------

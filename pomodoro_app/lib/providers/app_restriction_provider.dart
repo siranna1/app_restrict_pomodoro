@@ -13,6 +13,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import 'dart:io';
 import '../services/windows_background/windows_system_tray_service.dart';
+import 'sync_provider.dart';
 
 class AppRestrictionProvider with ChangeNotifier {
   final _windowsAppController = WindowsAppController();
@@ -41,14 +42,16 @@ class AppRestrictionProvider with ChangeNotifier {
   int get usedPoints => rewardPoints.usedPoints;
 
   static AppRestrictionProvider? _instance;
+  final SyncProvider? syncProvider;
 
   @override
   void dispose() {
     _unlockExpirationTimer?.cancel();
+    syncProvider?.removeSyncCompletedListener(_refreshData);
     super.dispose();
   }
 
-  AppRestrictionProvider() {
+  AppRestrictionProvider({this.syncProvider}) {
     _instance = this; // インスタンスを保存
     _initializeController();
     _loadRestrictedApps();
@@ -57,6 +60,23 @@ class AppRestrictionProvider with ChangeNotifier {
     _checkUnlockExpirations();
     initializeBackgroundServices();
     _startUnlockExpirationChecker();
+
+    // 同期完了リスナーを登録
+    syncProvider?.addSyncCompletedListener(_refreshData);
+  }
+  // 同期完了後のデータ更新
+  Future<void> _refreshData() async {
+    print('ポイント同期完了: ポイントデータを再読み込みします');
+    // ポイント情報をDBから再読み込み
+    final points = await DatabaseHelper.instance.getRewardPoints();
+    rewardPoints = rewardPoints.copyWith(
+        earnedPoints: points.earnedPoints, usedPoints: points.usedPoints);
+
+    // 制限アプリ情報の再読み込み
+    await _loadRestrictedApps();
+
+    // UI更新
+    notifyListeners();
   }
 
   void _startUnlockExpirationChecker() {
@@ -153,6 +173,9 @@ class AppRestrictionProvider with ChangeNotifier {
         print("${app.name}の解除期限が切れていたため、制限状態に戻しました");
       } else {
         // 通常のアプリを追加
+        if (app.executablePath != "unknown") {
+          apps.add(app);
+        }
         apps.add(app);
       }
     }

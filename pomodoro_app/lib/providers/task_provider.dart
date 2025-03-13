@@ -2,13 +2,30 @@
 import 'package:flutter/material.dart';
 import '../models/task.dart';
 import '../services/database_helper.dart';
+import 'sync_provider.dart';
 
 class TaskProvider with ChangeNotifier {
   List<Task> _tasks = [];
 
   List<Task> get tasks => _tasks;
+  // SyncProviderを参照
+  final SyncProvider? syncProvider;
 
-  TaskProvider() {
+  TaskProvider({this.syncProvider}) {
+    loadTasks();
+
+    // 同期完了リスナーを登録
+    syncProvider?.addSyncCompletedListener(_onSyncCompleted);
+  }
+  @override
+  void dispose() {
+    syncProvider?.removeSyncCompletedListener(_onSyncCompleted);
+    super.dispose();
+  }
+
+  // 同期完了時の処理
+  void _onSyncCompleted() {
+    print('タスク同期完了: タスクデータを再読み込みします');
     loadTasks();
   }
 

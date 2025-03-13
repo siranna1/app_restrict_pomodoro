@@ -9,6 +9,7 @@ import androidx.annotation.NonNull
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import io.flutter.plugins.GeneratedPluginRegistrant
 
 class MainActivity: FlutterActivity() {
     private lateinit var appController: AndroidAppController
@@ -29,6 +30,8 @@ class MainActivity: FlutterActivity() {
     
     override fun configureFlutterEngine(@NonNull flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        // Flutterエンジンにプラグインを登録
+        GeneratedPluginRegistrant.registerWith(flutterEngine)
         
         // AndroidAppControllerの初期化と登録
         appController = AndroidAppController(applicationContext, this)
@@ -50,4 +53,9 @@ class MainActivity: FlutterActivity() {
         unregisterReceiver(expirationReceiver)
         super.onDestroy()
     }
+    // override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+    // // ここを追加
+    // super.onActivityResult(requestCode, resultCode, data);
+    // // ここで色々する
+    // }
 }

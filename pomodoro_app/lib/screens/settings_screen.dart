@@ -8,16 +8,21 @@ import '../providers/app_restriction_provider.dart';
 import 'ticktick_sync_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/settings_service.dart';
+import '../providers/sync_provider.dart';
+import 'package:intl/intl.dart';
+import 'sync/sync_setting_screen.dart';
 import '../services/notification_service.dart';
 
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({Key? key}) : super(key: key);
+  final String? initialTab;
+  const SettingsScreen({Key? key, this.initialTab}) : super(key: key);
 
   @override
   _SettingsScreenState createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen> {
+class _SettingsScreenState extends State<SettingsScreen>
+    with SingleTickerProviderStateMixin {
   // 設定の一時保存用
   late int _workDuration;
   late int _shortBreakDuration;
@@ -27,12 +32,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _enableSounds = true;
   String _selectedTheme = 'system';
   SettingsService? _settingsService;
+  late TabController _tabController;
 
   bool _isLoading = true;
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 4, vsync: this);
+
+    // 初期タブが指定されている場合は切り替え
+    if (widget.initialTab == 'sync') {
+      _tabController.animateTo(3); // 同期タブのインデックス
+    }
     _loadSettings();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   @override
@@ -101,7 +119,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final pomodoroProvider = Provider.of<PomodoroProvider>(context);
-
+    final syncProvider = Provider.of<SyncProvider>(context);
     if (_isLoading) {
       return Scaffold(
         appBar: AppBar(
@@ -331,6 +349,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           // 連携設定
           _buildSectionHeader(context, '連携'),
 
+          SyncSettingScreen(),
           ListTile(
             title: const Text('TickTick連携'),
             subtitle: const Text('TickTickとタスクやポモドーロ記録を同期します'),

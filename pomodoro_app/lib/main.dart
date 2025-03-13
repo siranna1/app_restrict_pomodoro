@@ -23,9 +23,37 @@ import 'package:app_links/app_links.dart';
 import 'dart:io';
 import 'platforms/android/android_app_controller.dart';
 import 'package:window_manager/window_manager.dart';
+import 'services/app_lifecycle_manager.dart';
+import 'providers/sync_provider.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'services/firebase/firebase_config.dart';
+import 'services/firebase/auth_service.dart';
+import 'services/firebase/sync_service.dart';
+import 'services/network_connectivity.dart';
+import 'services/background_sync_services.dart';
+import 'screens/ticktick_sync_screen.dart';
+import 'test/firebase_rest_test.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Firebase初期化
+  await FirebaseConfig.initialize();
+  // サービス初期化
+  final databaseHelper = DatabaseHelper();
+  await databaseHelper.initialize();
+
+// 設定サービスを初期化
+  final settingsService = SettingsService();
+  await settingsService.init();
+
+  // バックグラウンド同期サービス初期化
+  final backgroundSyncService = BackgroundSyncService();
+
+  final authService = AuthService();
+  authService.initialize();
+  final syncService = SyncService(databaseHelper, settingsService, authService);
+  final networkConnectivity = NetworkConnectivity();
+
   // Windowsの場合、バックグラウンドサービスを初期化
   if (Platform.isWindows) {
     WidgetsFlutterBinding.ensureInitialized();
@@ -48,17 +76,16 @@ void main() async {
         await windowManager.focus();
       });
     }
+  } else {
+    //windowsだとworkmanager使えないっぽい
+    await backgroundSyncService.initialize();
   }
 
   AndroidAppController.staticInitialize();
 
-  // 設定サービスを初期化
-  final settingsService = SettingsService();
-  await settingsService.init();
-
   // データベースファクトリの初期化
-  await DatabaseHelper.instance.initDatabaseFactory();
-  await DatabaseHelper.instance.database;
+  //await DatabaseHelper.instance.initDatabaseFactory();
+  //await DatabaseHelper.instance.database;
 
   // 通知サービスをインスタンス化して初期化
   final notificationService = NotificationService();
@@ -84,6 +111,7 @@ void main() async {
   runApp(
     MultiProvider(
       providers: [
+        // 既存のプロバイダー
         ChangeNotifierProvider(create: (_) => AppRestrictionProvider()),
         ChangeNotifierProvider(create: (_) => TickTickProvider()),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
@@ -98,9 +126,34 @@ void main() async {
         ChangeNotifierProvider<TaskProvider>.value(
           value: taskProvider,
         ),
-
         ChangeNotifierProvider<SettingsService>.value(
           value: settingsService,
+        ),
+
+        // 認証サービスを追加
+        Provider<AuthService>(
+          create: (_) => AuthService(),
+        ),
+
+        // SyncProviderは AuthService を使用するため、後に追加
+        ChangeNotifierProvider(
+          create: (context) => SyncProvider(
+            Provider.of<AuthService>(context, listen: false),
+            syncService,
+            settingsService,
+            networkConnectivity,
+            backgroundSyncService,
+          ),
+        ),
+        ChangeNotifierProvider(
+          create: (context) => TaskProvider(
+            syncProvider: Provider.of<SyncProvider>(context, listen: false),
+          ),
+        ),
+        ChangeNotifierProvider(
+          create: (context) => AppRestrictionProvider(
+            syncProvider: Provider.of<SyncProvider>(context, listen: false),
+          ),
         ),
       ],
       child: MyApp(),
@@ -114,15 +167,31 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
-
-    return MaterialApp(
-      title: 'ポモドーロ学習管理',
-      theme: themeProvider.lightTheme,
-      darkTheme: themeProvider.darkTheme,
-      themeMode: themeProvider.themeMode,
-      navigatorKey: GlobalContext.navigatorKey,
-      home: const MainScreen(),
-      debugShowCheckedModeBanner: false,
+    return AppLifecycleManager(
+      onAppResume: () {
+        // アプリ再開時に同期を実行
+        //Provider.of<SyncProvider>(context, listen: false).sync();
+      },
+      onAppPause: () {
+        // アプリ停止時の処理（必要に応じて）
+      },
+      child: MaterialApp(
+        title: 'ポモドーロ学習管理',
+        theme: themeProvider.lightTheme,
+        darkTheme: themeProvider.darkTheme,
+        themeMode: themeProvider.themeMode,
+        navigatorKey: GlobalContext.navigatorKey,
+        home: const MainScreen(),
+        debugShowCheckedModeBanner: false,
+        routes: {
+          '/tasks': (context) => const TasksScreen(),
+          '/statistics': (context) => const StatisticsScreen(),
+          '/settings': (context) => const SettingsScreen(),
+          '/app_store': (context) => const AppStoreScreen(),
+          '/ticktick_sync': (context) => const TickTickSyncScreen(),
+          '/test': (context) => const FirebaseRestTest(),
+        },
+      ),
     );
   }
 }

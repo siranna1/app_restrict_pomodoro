@@ -1,4 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     package="com.example.pomodoro_app">
     <!-- 使用状況統計へのアクセス権限 -->
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
@@ -11,6 +12,13 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- インターネット接続のパーミッション -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- ネットワーク状態のパーミッション -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- バックグラウンド処理のパーミッション -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <!-- 通知に関する権限-->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
@@ -19,6 +27,12 @@
         android:label="pomodoro_app"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        <!-- WorkManagerの設定 -->
+        <provider
+            android:name="androidx.work.impl.WorkManagerInitializer"
+            android:authorities="${applicationId}.workmanager-init"
+            android:exported="false"
+            tools:node="remove" />
         <!-- サービスを登録 -->
         <service
             android:name=".AppMonitorService"

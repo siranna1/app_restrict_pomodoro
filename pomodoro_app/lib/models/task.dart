@@ -1,7 +1,7 @@
 // models/task.dart - タスクモデル
 class Task {
-  final int? id;
-  final String name;
+  int? id;
+  String name;
   final String category;
   final String description;
   final int estimatedPomodoros;
@@ -9,6 +9,10 @@ class Task {
   final DateTime createdAt;
   DateTime updatedAt;
   final String? tickTickId;
+
+  // Firebase同期用に追加
+  String? firebaseId;
+  bool isDeleted = false; // 論理削除フラグ
 
   Task({
     this.id,
@@ -20,8 +24,10 @@ class Task {
     DateTime? createdAt,
     DateTime? updatedAt,
     this.tickTickId,
-  }) : this.createdAt = createdAt ?? DateTime.now(),
-       this.updatedAt = updatedAt ?? DateTime.now();
+    this.firebaseId,
+    this.isDeleted = false,
+  })  : this.createdAt = createdAt ?? DateTime.now(),
+        this.updatedAt = updatedAt ?? DateTime.now();
 
   Map<String, dynamic> toMap() {
     return {
@@ -34,6 +40,8 @@ class Task {
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
       'tickTickId': tickTickId,
+      'firebaseId': firebaseId,
+      'isDeleted': isDeleted ? 1 : 0,
     };
   }
 
@@ -48,6 +56,8 @@ class Task {
       createdAt: DateTime.parse(map['createdAt']),
       updatedAt: DateTime.parse(map['updatedAt']),
       tickTickId: map['tickTickId'],
+      firebaseId: map['firebaseId'],
+      isDeleted: map['isDeleted'] == 1,
     );
   }
 
@@ -61,6 +71,8 @@ class Task {
     DateTime? createdAt,
     DateTime? updatedAt,
     String? tickTickId,
+    String? firebaseId,
+    bool? isDeleted,
   }) {
     return Task(
       id: id ?? this.id,
@@ -72,6 +84,36 @@ class Task {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       tickTickId: tickTickId ?? this.tickTickId,
+      firebaseId: firebaseId ?? this.firebaseId,
+      isDeleted: isDeleted ?? this.isDeleted,
+    );
+  }
+
+  Map<String, dynamic> toFirebase() {
+    return {
+      'name': name,
+      'category': category,
+      'description': description,
+      'estimatedPomodoros': estimatedPomodoros,
+      'completedPomodoros': completedPomodoros,
+      'createdAt': createdAt.toIso8601String(),
+      'updatedAt': updatedAt.toIso8601String(),
+      'tickTickId': tickTickId,
+      'isDeleted': isDeleted,
+    };
+  }
+
+  factory Task.fromFirebase(Map<String, dynamic> data) {
+    return Task(
+      name: data['name'],
+      category: data['category'],
+      description: data['description'],
+      estimatedPomodoros: data['estimatedPomodoros'],
+      completedPomodoros: data['completedPomodoros'],
+      createdAt: DateTime.parse(data['createdAt']),
+      updatedAt: DateTime.parse(data['updatedAt']),
+      tickTickId: data['tickTickId'],
+      isDeleted: data['isDeleted'] ?? false,
     );
   }
 }
