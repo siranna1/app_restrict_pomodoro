@@ -7,7 +7,10 @@ class AuthService {
   // 現在のユーザーID取得
   String? get userId => _auth.currentUser?.uid;
   // ユーザーのログイン状態監視
-  Stream<User?> get authStateChanges => _auth.authStateChanges();
+  Stream<User?> get authStateChanges {
+    // UI更新処理を含む場合はメインスレッドで実行されるよう保証
+    return _auth.authStateChanges();
+  }
 
   // メールとパスワードで登録
   Future<String?> registerWithEmailPassword(

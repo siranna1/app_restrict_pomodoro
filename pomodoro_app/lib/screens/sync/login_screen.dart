@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:pomodoro_app/services/firebase/auth_service.dart';
+import 'package:flutter/foundation.dart';
 
 class LoginScreen extends StatefulWidget {
   @override
@@ -33,7 +34,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       final authService = Provider.of<AuthService>(context, listen: false);
-
+      // プラットフォームごとに処理を分ける
+      if (defaultTargetPlatform == TargetPlatform.windows) {
+        // Windowsでは明示的にasync処理をUI更新後に実行
+        await Future.delayed(Duration.zero); // イベントループを一巡させる
+      }
       if (_isLogin) {
         // ログイン処理
         await authService.signInWithEmailPassword(
@@ -116,7 +121,24 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               SizedBox(height: 24),
               ElevatedButton(
-                onPressed: _isLoading ? null : _submit,
+                onPressed: () {
+                  // if (!_isLoading)
+                  //   WidgetsBinding.instance.scheduleTask(() async {
+                  //     _submit();
+                  //   });
+                  _isLoading
+                      ? null
+                      : () {
+                          if (defaultTargetPlatform == TargetPlatform.windows) {
+                            // ScheduleTaskを使用してメインスレッドでの実行を保証
+                            WidgetsBinding.instance.scheduleFrameCallback((_) {
+                              _submit();
+                            });
+                          } else {
+                            _submit();
+                          }
+                        };
+                },
                 child: _isLoading
                     ? CircularProgressIndicator()
                     : Text(_isLogin ? 'ログイン' : '登録'),

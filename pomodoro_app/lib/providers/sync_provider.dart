@@ -8,6 +8,7 @@ import 'package:pomodoro_app/services/network_connectivity.dart';
 import 'package:pomodoro_app/services/background_sync_services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:pomodoro_app/providers/pomodoro_provider.dart';
+import 'package:flutter/widgets.dart';
 
 class SyncProvider with ChangeNotifier {
   final AuthService _authService;
@@ -30,11 +31,20 @@ class SyncProvider with ChangeNotifier {
   ) {
     // 初期化時に自動同期を設定
     _setupAutoSync();
-    // 認証状態変更リスナーを追加
-    FirebaseAuth.instance.authStateChanges().listen((User? user) {
-      // 認証状態が変わったらリスナーに通知
-      notifyListeners();
-    });
+    // Windows環境では特別な処理
+    if (defaultTargetPlatform == TargetPlatform.windows) {
+      // UIスレッドで認証状態監視を開始
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        FirebaseAuth.instance.authStateChanges().listen((User? user) {
+          notifyListeners();
+        });
+      });
+    } else {
+      // 他のプラットフォームでは通常通り
+      FirebaseAuth.instance.authStateChanges().listen((User? user) {
+        notifyListeners();
+      });
+    }
   }
 
   bool get isSyncing => _isSyncing;

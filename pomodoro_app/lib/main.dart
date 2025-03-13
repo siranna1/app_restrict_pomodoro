@@ -47,7 +47,6 @@ void main() async {
 
   // バックグラウンド同期サービス初期化
   final backgroundSyncService = BackgroundSyncService();
-  await backgroundSyncService.initialize();
 
   final authService = AuthService();
   final syncService = SyncService(
@@ -78,6 +77,9 @@ void main() async {
         await windowManager.focus();
       });
     }
+  } else {
+    //windowsだとworkmanager使えないっぽい
+    await backgroundSyncService.initialize();
   }
 
   AndroidAppController.staticInitialize();

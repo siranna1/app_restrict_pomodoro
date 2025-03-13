@@ -33,7 +33,7 @@ dependencies:
   # その他のユーティリティ
   intl: ^0.18.0
   url_launcher: ^6.1.5
-  file_picker: ^9.0.2
+  file_picker: ^8.0.7
   http: ^0.13.5
   flutter_local_notifications: ^18.0.1
   
@@ -53,9 +53,9 @@ dependencies:
   app_links: ^6.4.0
 
   # Firebase
-  firebase_core: ^2.15.0
+  firebase_core: ^2.31.1
   firebase_database: ^10.2.4
-  firebase_auth: ^4.7.2
+  firebase_auth: ^4.20.0
   connectivity_plus: ^4.0.2
   workmanager: ^0.5.2
   

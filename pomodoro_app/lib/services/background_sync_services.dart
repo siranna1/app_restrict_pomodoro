@@ -1,10 +1,13 @@
 // background_sync_service.dart
+import 'dart:io';
+
 import 'package:workmanager/workmanager.dart';
 import 'package:firebase_core/firebase_core.dart';
 import '../services/database_helper.dart';
 import '../services/settings_service.dart';
 import '../services/firebase/auth_service.dart';
 import '../services/firebase/sync_service.dart';
+import '../utils/platform_utils.dart';
 
 @pragma('vm:entry-point') // Dartコンパイラに必要なアノテーション
 void callbackDispatcher() {
@@ -13,21 +16,24 @@ void callbackDispatcher() {
       // Firebase初期化
       await Firebase.initializeApp();
 
-      // サービスの初期化
+      // ユーザーIDをInputDataから取得する方法に変更
+      final userId = inputData?['userId'] as String?;
+      if (userId == null) {
+        print('UserID not provided for background sync');
+        return false;
+      }
+
+      // サービスの初期化（AuthServiceは使わない）
       final databaseHelper = DatabaseHelper();
       await databaseHelper.initialize();
 
       final settingsService = SettingsService();
       await settingsService.init();
 
-      final authService = AuthService();
       final syncService = SyncService(databaseHelper, settingsService);
 
-      // 同期処理
-      final userId = authService.userId;
-      if (userId != null) {
-        await syncService.syncAll(userId);
-      }
+      // 同期処理（事前に取得したユーザーIDを使用）
+      await syncService.syncAll(userId);
 
       return true;
     } catch (e) {
@@ -47,19 +53,31 @@ class BackgroundSyncService {
 
   // 定期同期のスケジュール
   Future<void> schedulePeriodicSync(int intervalMinutes) async {
-    await Workmanager().registerPeriodicTask(
-      syncTaskName,
-      syncTaskName,
-      frequency: Duration(minutes: intervalMinutes),
-      constraints: Constraints(
-        networkType: NetworkType.connected,
-      ),
-      existingWorkPolicy: ExistingWorkPolicy.replace,
-    );
+    PlatformUtils platformUtils = PlatformUtils();
+    if (platformUtils.isWindows) return;
+
+    // ここでUIスレッドからユーザーIDを取得
+    final authService = AuthService();
+    final userId = authService.userId;
+
+    if (userId != null) {
+      await Workmanager().registerPeriodicTask(
+        syncTaskName,
+        syncTaskName,
+        frequency: Duration(minutes: intervalMinutes),
+        inputData: {'userId': userId}, // ユーザーIDを渡す
+        constraints: Constraints(
+          networkType: NetworkType.connected,
+        ),
+        existingWorkPolicy: ExistingWorkPolicy.replace,
+      );
+    }
   }
 
   // 同期のキャンセル
   Future<void> cancelSync() async {
+    PlatformUtils platformUtils = PlatformUtils();
+    if (platformUtils.isWindows) return;
     await Workmanager().cancelByUniqueName(syncTaskName);
   }
 }

@@ -7,12 +7,13 @@ import '../../providers/sync_provider.dart';
 import '../../widgets/auth_dialog.dart';
 import '../../services/firebase/auth_service.dart';
 import '../../services/settings_service.dart';
+import '../../utils/platform_utils.dart';
 
 class SyncSettingScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final syncProvider = Provider.of<SyncProvider>(context);
-
+    final platformUtils = PlatformUtils();
     return Card(
       margin: EdgeInsets.symmetric(vertical: 8.0),
       child: Padding(
@@ -61,6 +62,7 @@ class SyncSettingScreen extends StatelessWidget {
             Divider(height: 24),
 
             // 自動同期設定
+            //if (!platformUtils.isWindows)
             SwitchListTile(
               title: Text('自動同期'),
               subtitle: Text('定期的にデータを同期します'),
@@ -69,7 +71,7 @@ class SyncSettingScreen extends StatelessWidget {
                   ? (value) => syncProvider.toggleAutoSync(value)
                   : null,
             ),
-
+            //if (!platformUtils.isWindows)
             if (Provider.of<SettingsService>(context).autoSyncEnabled &&
                 syncProvider.isAuthenticated)
               Padding(
