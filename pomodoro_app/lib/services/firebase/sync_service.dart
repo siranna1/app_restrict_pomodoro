@@ -8,19 +8,38 @@ import 'package:pomodoro_app/models/reward_point.dart';
 import 'package:pomodoro_app/models/app_usage_session.dart';
 import 'package:pomodoro_app/models/restricted_app.dart';
 import 'dart:math';
+import 'auth_service.dart';
+import '../../utils/platform_utils.dart';
+import 'firebase_rest_service.dart';
 
 class SyncService {
   final DatabaseReference _database = FirebaseDatabase.instance.ref();
   final DatabaseHelper _dbHelper;
   final SettingsService _settingsService;
+  final AuthService _authService;
+  final PlatformUtils _platformUtils = PlatformUtils();
+  // REST APIベースの実装用
+  late FirebaseRestService _restService;
 
-  SyncService(this._dbHelper, this._settingsService);
+  // Firebase Realtime DBのURL
+  final String _databaseUrl =
+      'https://pomodoroappsync-default-rtdb.asia-southeast1.firebasedatabase.app';
+
+  SyncService(this._dbHelper, this._settingsService, this._authService) {
+    // REST APIサービスを初期化
+    _restService = FirebaseRestService(
+      authService: _authService,
+      databaseUrl: _databaseUrl,
+    );
+  }
+
+  // プラットフォームに応じたサービス選択
+  bool get _useRestApi => _platformUtils.isWindows;
 
   // タスク同期 - 改良版
   Future<void> syncTasks(String userId) async {
     try {
-      print("同期開始");
-      final tasksRef = _database.child('users/$userId/tasks');
+      print("タスク同期開始 (${_useRestApi ? 'REST API' : 'SDK'})");
 
       // 前回の同期タイムスタンプ取得
       final lastSyncTime = await _settingsService.getLastSyncTime('tasks');
@@ -34,43 +53,66 @@ class SyncService {
       for (var task in localTasks) {
         localTaskNameMap[task.name] = task;
       }
-
-      // Firebaseからタスクを取得
-      final snapshot = await tasksRef.get();
-      print("同期中");
-      //final snapshot = event.snapshot;
-
       Map<String, dynamic> remoteTasks = {};
+      if (_useRestApi) {
+        final remoteData =
+            await _restService.getTasksChangedSince(userId, lastSyncTime);
+        if (remoteData != null) {
+          remoteTasks = remoteData;
+        }
+      } else {
+        final tasksRef = _database.child('users/$userId/tasks');
 
-      if (snapshot.value != null) {
-        // Firebase データを Map<String, dynamic> に変換
-        final data = snapshot.value as Map<dynamic, dynamic>;
-        data.forEach((key, value) {
-          if (value is Map) {
-            remoteTasks[key.toString()] = Map<String, dynamic>.from(value.map(
-              (k, v) => MapEntry(k.toString(), v),
-            ));
-          }
-        });
+        // Firebaseからタスクを取得
+        final snapshot = await tasksRef.get();
+        //final snapshot = event.snapshot;
+
+        if (snapshot.value != null) {
+          // Firebase データを Map<String, dynamic> に変換
+          final data = snapshot.value as Map<dynamic, dynamic>;
+          data.forEach((key, value) {
+            if (value is Map) {
+              remoteTasks[key.toString()] = Map<String, dynamic>.from(value.map(
+                (k, v) => MapEntry(k.toString(), v),
+              ));
+            }
+          });
+        }
       }
 
       // リモートに存在しないローカルタスクをアップロード
       for (var task in localTasks) {
         if (task.firebaseId == null ||
             !remoteTasks.containsKey(task.firebaseId)) {
-          final newRef = tasksRef.push();
-          task.firebaseId = newRef.key;
-          await newRef.set(task.toFirebase());
-          await _dbHelper.updateTask(task);
-          print('新しいタスクをアップロード: ${task.name}');
+          String? newFirebaseId;
+          if (_useRestApi) {
+            newFirebaseId = await _restService.syncTask(userId, task);
+          } else {
+            final tasksRef = _database.child('users/$userId/tasks');
+            final newRef = tasksRef.push();
+            task.firebaseId = newRef.key;
+            await newRef.set(task.toFirebase());
+            newFirebaseId = newRef.key;
+          }
+          if (newFirebaseId != null) {
+            task.firebaseId = newFirebaseId;
+            await _dbHelper.updateTask(task);
+            print('新しいタスクをアップロード: ${task.name}');
+          }
         } else {
           // 更新日時に基づいて同期
           final remoteTask = remoteTasks[task.firebaseId!];
           final remoteUpdated = DateTime.parse(remoteTask['updatedAt']);
 
           if (task.updatedAt.isAfter(remoteUpdated)) {
-            // ローカルの方が新しい場合、アップロード
-            await tasksRef.child(task.firebaseId!).set(task.toFirebase());
+            if (_useRestApi) {
+              await _restService.updateData(
+                  'users/$userId/tasks/${task.firebaseId}', task.toFirebase());
+            } else {
+              // ローカルの方が新しい場合、アップロード
+              final tasksRef = _database.child('users/$userId/tasks');
+              await tasksRef.child(task.firebaseId!).set(task.toFirebase());
+            }
             print('既存タスクを更新: ${task.name}');
           } else if (remoteUpdated.isAfter(task.updatedAt)) {
             // リモートの方が新しい場合、ダウンロード
@@ -91,7 +133,7 @@ class SyncService {
         // FirebaseIDでの存在チェック
         final existsByFirebaseId =
             localTasks.any((task) => task.firebaseId == key);
-
+        print("FirebaseIDでの存在チェック $existsByFirebaseId");
         if (!existsByFirebaseId) {
           final remoteTaskName = taskData['name'] as String;
 
@@ -132,7 +174,7 @@ class SyncService {
   // ポモドーロセッション同期 - 改良版
   Future<void> syncPomodoroSessions(String userId) async {
     try {
-      final sessionsRef = _database.child('users/$userId/pomodoro_sessions');
+      print("ポモドーロセッション同期開始 (${_useRestApi ? 'REST API' : 'SDK'})");
 
       // 前回の同期タイムスタンプ取得
       final lastSyncTime =
@@ -163,24 +205,31 @@ class SyncService {
 
       // タスクとFirebase IDのマッピングを取得
       final taskMappings = await _getTaskFirebaseIdMappings();
-
-      // Firebaseからセッションを取得
-      final event = await sessionsRef.once();
-      final snapshot = event.snapshot;
-
       Map<String, dynamic> remoteSessions = {};
+      if (_useRestApi) {
+        final remoteData =
+            await _restService.getSessionsChangedSince(userId, lastSyncTime);
+        if (remoteData != null) {
+          remoteSessions = remoteData;
+        }
+      } else {
+        final sessionsRef = _database.child('users/$userId/pomodoro_sessions');
+        // Firebaseからセッションを取得
+        final event = await sessionsRef.once();
+        final snapshot = event.snapshot;
 
-      if (snapshot.value != null) {
-        // Firebase データを Map<String, dynamic> に変換
-        final data = snapshot.value as Map<dynamic, dynamic>;
-        data.forEach((key, value) {
-          if (value is Map) {
-            remoteSessions[key.toString()] =
-                Map<String, dynamic>.from(value.map(
-              (k, v) => MapEntry(k.toString(), v),
-            ));
-          }
-        });
+        if (snapshot.value != null) {
+          // Firebase データを Map<String, dynamic> に変換
+          final data = snapshot.value as Map<dynamic, dynamic>;
+          data.forEach((key, value) {
+            if (value is Map) {
+              remoteSessions[key.toString()] =
+                  Map<String, dynamic>.from(value.map(
+                (k, v) => MapEntry(k.toString(), v),
+              ));
+            }
+          });
+        }
       }
 
       // リモートに存在しないローカルセッションをアップロード（変更されたもののみ）
@@ -192,19 +241,26 @@ class SyncService {
         if (firebaseTaskId != null) {
           if (session.firebaseId == null ||
               !remoteSessions.containsKey(session.firebaseId)) {
-            final newRef = sessionsRef.push();
-            session.firebaseId = newRef.key;
+            String? newFirebaseId;
+            session.firebaseId = firebaseTaskId;
+            if (_useRestApi) {
+              newFirebaseId = await _restService.syncSession(userId, session);
+            } else {
+              final sessionsRef =
+                  _database.child('users/$userId/pomodoro_sessions');
+              final newRef = sessionsRef.push();
 
-            // セッションデータにタスクのFirebase IDを含める
-            final sessionData = session.toFirebase();
-            sessionData['firebaseTaskId'] = firebaseTaskId;
+              // セッションデータにタスクのFirebase IDを含める
+              final sessionData = session.toFirebase();
+              sessionData['firebaseTaskId'] = firebaseTaskId;
 
-            await newRef.set(sessionData);
-
-            // ローカルのセッションにもFirebaseタスクIDを保存
-            session.firebaseTaskId = firebaseTaskId;
-            await _dbHelper.updatePomodoroSession(session);
-            print('新しいセッションをアップロード: ${session.id}');
+              await newRef.set(sessionData);
+            }
+            if (newFirebaseId != null) {
+              session.firebaseId = newFirebaseId;
+              await _dbHelper.updatePomodoroSession(session);
+              print('新しいセッションをアップロード: ${session.id}');
+            }
           }
         } else {
           print('警告: セッションID ${session.id} に関連するタスクのFirebase IDが見つかりません');
@@ -343,44 +399,65 @@ class SyncService {
   // 制限アプリの同期
   Future<void> syncRestrictedApps(String userId) async {
     try {
-      final appsRef = _database.child('users/$userId/restricted_apps');
+      print("制限アプリ同期開始 (${_useRestApi ? 'REST API' : 'SDK'})");
 
       // ローカルの制限アプリを取得
       final localApps = await _dbHelper.getRestrictedApps();
-
-      // Firebaseから制限アプリを取得
-      final event = await appsRef.once();
-      final snapshot = event.snapshot;
-
       Map<String, dynamic> remoteApps = {};
+      if (_useRestApi) {
+        final remoteData = await _restService.getRestrictedApps(userId);
+        if (remoteData != null) {
+          remoteApps = remoteData;
+        }
+      } else {
+        final appsRef = _database.child('users/$userId/restricted_apps');
+        // Firebaseから制限アプリを取得
+        final event = await appsRef.once();
+        final snapshot = event.snapshot;
 
-      if (snapshot.value != null) {
-        // Firebase データを Map<String, dynamic> に変換
-        final data = snapshot.value as Map<dynamic, dynamic>;
-        data.forEach((key, value) {
-          if (value is Map) {
-            remoteApps[key.toString()] = Map<String, dynamic>.from(value.map(
-              (k, v) => MapEntry(k.toString(), v),
-            ));
-          }
-        });
+        if (snapshot.value != null) {
+          // Firebase データを Map<String, dynamic> に変換
+          final data = snapshot.value as Map<dynamic, dynamic>;
+          data.forEach((key, value) {
+            if (value is Map) {
+              remoteApps[key.toString()] = Map<String, dynamic>.from(value.map(
+                (k, v) => MapEntry(k.toString(), v),
+              ));
+            }
+          });
+        }
       }
 
       // リモートに存在しないローカルアプリをアップロード
       for (var app in localApps) {
         if (app.firebaseId == null || !remoteApps.containsKey(app.firebaseId)) {
-          final newRef = appsRef.push();
+          String? newFirebaseId;
+          if (_useRestApi) {
+            newFirebaseId = await _restService.syncRestrictedApp(userId, app);
+          } else {
+            final appsRef = _database.child('users/$userId/restricted_apps');
+            final newRef = appsRef.push();
+            newFirebaseId = newRef.key;
+            await newRef.set(app.toFirebase());
+          }
+          if (newFirebaseId != null) {
+            // ローカルアプリにFirebase IDを設定して保存
+            final updatedApp = app.copyWith(firebaseId: newFirebaseId);
+            await _dbHelper.updateRestrictedApp(updatedApp);
 
-          // ローカルアプリにFirebase IDを設定して保存
-          final updatedApp = app.copyWith(firebaseId: newRef.key);
-          await _dbHelper.updateRestrictedApp(updatedApp);
-
-          // Firebase にアップロード
-          await newRef.set(app.toFirebase());
-          print('新しい制限アプリをアップロード: ${app.name}');
+            print('新しい制限アプリをアップロード: ${app.name}');
+          }
         } else {
-          // 既存のアプリは設定のみアップデート（セッション終了時間などの一時的な状態は除く）
-          await appsRef.child(app.firebaseId!).update(app.toFirebase());
+          if (_useRestApi) {
+            await _restService.updateData(
+                'users/$userId/restricted_apps/${app.firebaseId}',
+                app.toFirebase());
+          } else {
+            // 既存のアプリは設定のみアップデート（セッション終了時間などの一時的な状態は除く）
+            await _database
+                .child('users/$userId/restricted_apps/${app.firebaseId}')
+                .update(app.toFirebase());
+          }
           print('既存の制限アプリを更新: ${app.name}');
         }
       }
@@ -427,24 +504,31 @@ class SyncService {
   // ポイント同期 - 改良版
   Future<void> syncRewardPoints(String userId) async {
     try {
-      final pointsRef = _database.child('users/$userId/reward_points');
+      print("ポイント同期開始 (${_useRestApi ? 'REST API' : 'SDK'})");
 
       // ローカルポイント取得
       final localPoints = await _dbHelper.getRewardPoints();
       print(
           '同期前のローカルポイント: 獲得=${localPoints.earnedPoints}, 使用=${localPoints.usedPoints}, 前回同期獲得=${localPoints.lastSyncEarnedPoints}, 前回同期使用=${localPoints.lastSyncUsedPoints}');
 
-      // リモートポイント取得
-      final event = await pointsRef.once();
-      final snapshot = event.snapshot;
+      Map<String, dynamic>? remotePointsData;
+      if (_useRestApi) {
+        remotePointsData = await _restService.getRewardPoints(userId);
+      } else {
+        final pointsRef = _database.child('users/$userId/reward_points');
+        final event = await pointsRef.once();
+        final snapshot = event.snapshot;
 
-      if (snapshot.exists && snapshot.value != null) {
-        final remoteData = snapshot.value as Map<dynamic, dynamic>;
-        final remoteMap = Map<String, dynamic>.from(remoteData.map(
-          (k, v) => MapEntry(k.toString(), v),
-        ));
+        if (snapshot.exists && snapshot.value != null) {
+          final remoteData = snapshot.value as Map<dynamic, dynamic>;
+          remotePointsData = Map<String, dynamic>.from(remoteData.map(
+            (k, v) => MapEntry(k.toString(), v),
+          ));
+        }
+      }
 
-        final remotePoints = RewardPoint.fromFirebase(remoteMap);
+      if (remotePointsData != null && remotePointsData.isNotEmpty) {
+        final remotePoints = RewardPoint.fromFirebase(remotePointsData);
         print(
             'リモートポイント: 獲得=${remotePoints.earnedPoints}, 使用=${remotePoints.usedPoints}, 前回同期獲得=${remotePoints.lastSyncEarnedPoints}, 前回同期使用=${remotePoints.lastSyncUsedPoints}');
 
@@ -492,7 +576,24 @@ class SyncService {
 
         // ローカルとリモートの両方を更新
         await _dbHelper.updateRewardPoints(mergedPoints);
-        await pointsRef.set(mergedPoints.toFirebase());
+        if (_useRestApi) {
+          // REST API実装
+          if (mergedPoints.firebaseId != null) {
+            await _restService.updateData(
+                'users/$userId/reward_points/${mergedPoints.firebaseId}',
+                mergedPoints.toFirebase());
+          } else {
+            final newFirebaseId =
+                await _restService.syncRewardPoint(userId, mergedPoints);
+            if (newFirebaseId != null) {
+              mergedPoints.firebaseId = newFirebaseId;
+              await _dbHelper.updateRewardPoints(mergedPoints);
+            }
+          }
+        } else {
+          final pointsRef = _database.child('users/$userId/reward_points');
+          await pointsRef.set(mergedPoints.toFirebase());
+        }
 
         print('ポイントデータを増分同期しました: 獲得=$newEarnedPoints, 使用=$newUsedPoints');
       } else {
@@ -501,9 +602,18 @@ class SyncService {
           lastSyncEarnedPoints: localPoints.earnedPoints,
           lastSyncUsedPoints: localPoints.usedPoints,
         );
-
-        await pointsRef.set(initialPoints.toFirebase());
-        await _dbHelper.updateRewardPoints(initialPoints);
+        if (_useRestApi) {
+          final newFirebaseId =
+              await _restService.syncRewardPoint(userId, initialPoints);
+          if (newFirebaseId != null) {
+            initialPoints.firebaseId = newFirebaseId;
+            await _dbHelper.updateRewardPoints(initialPoints);
+          }
+        } else {
+          final pointsRef = _database.child('users/$userId/reward_points');
+          await pointsRef.set(initialPoints.toFirebase());
+          await _dbHelper.updateRewardPoints(initialPoints);
+        }
 
         print(
             '初期ポイントデータをアップロード: 獲得=${initialPoints.earnedPoints}, 使用=${initialPoints.usedPoints}');
@@ -519,8 +629,7 @@ class SyncService {
 
   Future<void> syncAppUsageSessions(String userId) async {
     try {
-      final sessionsRef = _database.child('users/$userId/app_usage_sessions');
-
+      print("アプリ使用セッション同期開始 (${_useRestApi ? 'REST API' : 'SDK'})");
       // 前回の同期タイムスタンプ取得
       final lastSyncTime =
           await _settingsService.getLastSyncTime('app_usage_sessions');
@@ -540,40 +649,54 @@ class SyncService {
           session.appPath = appInfo['executablePath'];
         }
       }
-
-      // Firebaseからデータ取得
-      final event = await sessionsRef.once();
-      final snapshot = event.snapshot;
-
       Map<String, dynamic> remoteSessions = {};
+      if (_useRestApi) {
+        final remoteData =
+            await _restService.getAppUsageSessions(userId, lastSyncTime);
+        if (remoteData != null) {
+          remoteSessions = remoteData;
+        }
+      } else {
+        final sessionsRef = _database.child('users/$userId/app_usage_sessions');
+        // Firebaseからデータ取得
+        final event = await sessionsRef.once();
+        final snapshot = event.snapshot;
 
-      if (snapshot.value != null) {
-        final data = snapshot.value as Map<dynamic, dynamic>;
-        data.forEach((key, value) {
-          if (value is Map) {
-            remoteSessions[key.toString()] =
-                Map<String, dynamic>.from(value.map(
-              (k, v) => MapEntry(k.toString(), v),
-            ));
-          }
-        });
+        if (snapshot.value != null) {
+          final data = snapshot.value as Map<dynamic, dynamic>;
+          data.forEach((key, value) {
+            if (value is Map) {
+              remoteSessions[key.toString()] =
+                  Map<String, dynamic>.from(value.map(
+                (k, v) => MapEntry(k.toString(), v),
+              ));
+            }
+          });
+        }
       }
-
       // ローカルセッションのアップロード
       for (var session in localSessions) {
         if (session.firebaseId == null ||
             !remoteSessions.containsKey(session.firebaseId)) {
-          final newRef = sessionsRef.push();
-
-          // セッションデータにアプリ情報を含める
-          final sessionData = session.toFirebase();
-
-          await newRef.set(sessionData);
-
-          // ローカルのセッションにFirebase IDを保存
-          session.firebaseId = newRef.key;
-          await _dbHelper.updateAppUsageSession(session);
-          print('新しいアプリ使用セッションをアップロード: ${session.appName}');
+          String? newFirebaseId;
+          if (_useRestApi) {
+            newFirebaseId =
+                await _restService.syncAppUsageSession(userId, session);
+          } else {
+            final sessionsRef =
+                _database.child('users/$userId/app_usage_sessions');
+            final newRef = sessionsRef.push();
+            newFirebaseId = newRef.key;
+            // セッションデータにアプリ情報を含める
+            final sessionData = session.toFirebase();
+            await newRef.set(sessionData);
+          }
+          if (newFirebaseId != null) {
+            // ローカルのセッションにFirebase IDを保存
+            session.firebaseId = newFirebaseId;
+            await _dbHelper.updateAppUsageSession(session);
+            print('新しいアプリ使用セッションをアップロード: ${session.appName}');
+          }
         }
       }
 

@@ -48,13 +48,13 @@ class _LoginScreenState extends State<LoginScreen> {
       }
       if (_isLogin) {
         // ログイン処理
-        await authService.signInWithEmailPassword(
+        await authService.signInWithEmailAndPassword(
           _emailController.text.trim(),
           _passwordController.text,
         );
       } else {
         // 登録処理
-        await authService.registerWithEmailPassword(
+        await authService.registerWithEmailAndPassword(
           _emailController.text.trim(),
           _passwordController.text,
         );
@@ -127,19 +127,19 @@ class _LoginScreenState extends State<LoginScreen> {
                     style: TextStyle(color: Colors.red[900]),
                   ),
                 ),
-              ElevatedButton.icon(
-                onPressed: _isLoading ? null : _signInWithGoogle,
-                icon: Image.asset(
-                  'assets/google_logo.png',
-                  height: 24,
-                ),
-                label: Text('Googleでログイン'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.black87,
-                ),
-              ),
-              SizedBox(height: 24),
+              // ElevatedButton.icon(
+              //   onPressed: _isLoading ? null : _signInWithGoogle,
+              //   icon: Image.asset(
+              //     'assets/google_logo.png',
+              //     height: 24,
+              //   ),
+              //   label: Text('Googleでログイン'),
+              //   style: ElevatedButton.styleFrom(
+              //     backgroundColor: Colors.white,
+              //     foregroundColor: Colors.black87,
+              //   ),
+              // ),
+              // SizedBox(height: 24),
               TextFormField(
                 controller: _emailController,
                 decoration: InputDecoration(labelText: 'メールアドレス'),

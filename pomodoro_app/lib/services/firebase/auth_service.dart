@@ -8,10 +8,11 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 import '../../utils/platform_utils.dart';
 import 'package:collection/collection.dart';
+import '../../utils/platform_utils.dart';
 
 class AuthService {
   final platform = PlatformUtils();
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  //final FirebaseAuth _auth = FirebaseAuth.instance;
   final GoogleSignIn _googleSignIn =
       defaultTargetPlatform == TargetPlatform.windows
           ? GoogleSignIn(
@@ -21,107 +22,344 @@ class AuthService {
             )
           : GoogleSignIn();
   // 現在のユーザーID取得
-  String? get userId => _auth.currentUser?.uid;
+  String? get userId => _firebaseAuth?.currentUser?.uid;
   // ユーザーのログイン状態監視
   Stream<User?> get authStateChanges {
     // UI更新処理を含む場合はメインスレッドで実行されるよう保証
-    return _auth.authStateChanges();
+    return _firebaseAuth.authStateChanges();
+  }
+
+  // Firebase認証インスタンス
+  dynamic _firebaseAuth;
+
+  // 現在のユーザー
+  dynamic _currentUser;
+
+  // ユーザー認証状態のリスナー
+  StreamSubscription? _authStateSubscription;
+
+  // 認証状態
+  bool _isInitialized = false;
+  bool _isLoggedIn = false;
+
+  // シングルトンパターン
+  static final AuthService _instance = AuthService._internal();
+
+  // ファクトリーコンストラクタ
+  factory AuthService() {
+    return _instance;
+  }
+
+  // プライベートコンストラクタ
+  AuthService._internal();
+
+  Future<void> initialize() async {
+    if (_isInitialized) return;
+
+    try {
+      // Windowsプラットフォームではスレッド関連の問題に対処
+      if (platform.isWindows) {
+        // WidgetsBindingを使用してUIスレッドで処理を実行
+        await _initializeOnUiThread();
+      } else {
+        // 他のプラットフォームでは通常通り初期化
+        await _initializeFirebaseAuth();
+      }
+
+      _isInitialized = true;
+    } catch (e) {
+      print('AuthService: Error initializing: $e');
+      rethrow;
+    }
+  }
+
+  void dispose() {
+    _authStateSubscription?.cancel();
+  }
+
+  // UIスレッドでの初期化（Windows向け）
+  Future<void> _initializeOnUiThread() async {
+    final completer = Completer<void>();
+
+    // UIスレッドで実行するためにWidgetsBindingを使用
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      try {
+        await _initializeFirebaseAuth();
+        completer.complete();
+      } catch (e) {
+        completer.completeError(e);
+      }
+    });
+
+    return completer.future;
+  }
+
+  // Firebase Auth初期化の共通部分
+  Future<void> _initializeFirebaseAuth() async {
+    try {
+      // FirebaseAuthのインポートとインスタンス化
+      // ここではdynamic型を使用していますが、実際には適切な型を使用すべきです
+      // Webの場合
+      if (kIsWeb) {
+        try {
+          // Webプラットフォーム用の初期化
+          // import 'package:firebase_auth/firebase_auth.dart';
+          _firebaseAuth = FirebaseAuth.instance;
+          print('AuthService: Initialized for Web platform');
+        } catch (e) {
+          print('AuthService: Error initializing for Web: $e');
+        }
+      } else {
+        try {
+          // ネイティブプラットフォーム用の初期化
+          // import 'package:firebase_auth/firebase_auth.dart';
+          _firebaseAuth = FirebaseAuth.instance;
+          print('AuthService: Initialized for native platform');
+        } catch (e) {
+          print('AuthService: Error initializing for native platform: $e');
+        }
+      }
+
+      // 認証状態の監視設定
+      _setupAuthStateListener();
+    } catch (e) {
+      print('AuthService: Error in _initializeFirebaseAuth: $e');
+      rethrow;
+    }
+  }
+
+  // 認証状態監視
+  void _setupAuthStateListener() {
+    try {
+      // 既存のサブスクリプションをクリーンアップ
+      _authStateSubscription?.cancel();
+
+      // 認証状態の変更を監視
+      _authStateSubscription = _firebaseAuth?.authStateChanges().listen((user) {
+        _currentUser = user;
+        _isLoggedIn = user != null;
+        print('AuthService: Auth state changed, user: ${user?.uid}');
+      }, onError: (error) {
+        print('AuthService: Auth state listener error: $error');
+        _handleMultiFactorException(error);
+      });
+    } catch (e) {
+      print('AuthService: Error setting up auth state listener: $e');
+    }
   }
 
   // メールとパスワードで登録
-  Future<String?> registerWithEmailPassword(
+  Future<String?> registerWithEmailAndPassword(
       String email, String password) async {
+    if (!_isInitialized) await initialize();
+
     try {
-      await _handleMultiFactorException(() async {
-        final userCredential = await _auth.createUserWithEmailAndPassword(
+      if (platform.isWindows) {
+        // Windows向けにUIスレッドで実行
+        final completer = Completer<String?>();
+
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          try {
+            final userCredential =
+                await _firebaseAuth.createUserWithEmailAndPassword(
+              email: email,
+              password: password,
+            );
+            _currentUser = userCredential.user;
+            _isLoggedIn = _currentUser != null;
+            completer.complete(_currentUser?.uid);
+          } catch (e) {
+            print('AuthService: Error registering: $e');
+            completer.complete(null);
+          }
+        });
+
+        return completer.future;
+      } else {
+        // 他のプラットフォーム向け
+        final userCredential =
+            await _firebaseAuth.createUserWithEmailAndPassword(
           email: email,
           password: password,
         );
-        print("登録成功: ${userCredential.user}");
-      });
-      return _auth.currentUser?.uid;
-    } on FirebaseAuthException catch (e) {
-      if (e.code == 'weak-password') {
-        throw 'パスワードが弱すぎます';
-      } else if (e.code == 'email-already-in-use') {
-        throw 'このメールアドレスは既に使用されています';
-      } else {
-        throw 'エラー: ${e.message}';
+        _currentUser = userCredential.user;
+        _isLoggedIn = _currentUser != null;
+        return _currentUser?.uid;
       }
     } catch (e) {
-      throw '登録エラー: $e';
+      print('AuthService: Error registering: $e');
+      return null;
     }
   }
 
   // メールとパスワードでログイン
-  Future<String?> signInWithEmailPassword(String email, String password) async {
+  Future<String?> signInWithEmailAndPassword(
+      String email, String password) async {
+    if (!_isInitialized) await initialize();
+
     try {
-      await _handleMultiFactorException(() async {
-        print("登録開始: $email");
-        final userCredential = await _auth.signInWithEmailAndPassword(
+      if (platform.isWindows) {
+        // Windows向けにUIスレッドで実行
+        final completer = Completer<String?>();
+
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          try {
+            final userCredential =
+                await _firebaseAuth.signInWithEmailAndPassword(
+              email: email,
+              password: password,
+            );
+            _currentUser = userCredential.user;
+            _isLoggedIn = _currentUser != null;
+            completer.complete(_currentUser?.uid);
+          } catch (e) {
+            print('AuthService: Error signing in: $e');
+            completer.complete(null);
+          }
+        });
+
+        return completer.future;
+      } else {
+        // 他のプラットフォーム向け
+        final userCredential = await _firebaseAuth.signInWithEmailAndPassword(
           email: email,
           password: password,
         );
-        print("登録成功: ${userCredential.user}");
-      });
-
-      // 登録が成功したら現在のユーザーのUIDを返す
-      return _auth.currentUser?.uid;
+        _currentUser = userCredential.user;
+        _isLoggedIn = _currentUser != null;
+        return _currentUser?.uid;
+      }
     } catch (e) {
-      print("登録エラー: $e");
-      rethrow;
+      print('AuthService: Error signing in: $e');
+      return null;
     }
   }
 
   // パスワードリセットメール送信
   Future<void> sendPasswordResetEmail(String email) async {
     try {
-      await _auth.sendPasswordResetEmail(email: email);
+      await _firebaseAuth.sendPasswordResetEmail(email: email);
     } catch (e) {
       throw 'パスワードリセットエラー: $e';
     }
   }
 
-  // Google認証でログイン
-  Future<String?> signInWithGoogle() async {
+  // 現在のユーザーIDを取得
+  String? getCurrentUserId() {
+    if (!_isInitialized || !_isLoggedIn || _currentUser == null) return null;
+    return _currentUser.uid;
+  }
+
+  // 現在のユーザーのIDトークンを取得（REST API用）
+  Future<String?> getCurrentUserIdToken() async {
+    if (!_isInitialized || !_isLoggedIn || _currentUser == null) return null;
+
     try {
-      await _handleMultiFactorException(() async {
-        print("Google認証開始");
+      if (platform.isWindows) {
+        // Windows向けにUIスレッドで実行
+        final completer = Completer<String?>();
 
-        // Google認証フロー
-        final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          try {
+            final idToken = await _currentUser.getIdToken();
+            completer.complete(idToken);
+          } catch (e) {
+            print('AuthService: Error getting ID token: $e');
+            completer.complete(null);
+          }
+        });
 
-        if (googleUser == null) {
-          print("Google認証キャンセル");
-          return;
-        }
-
-        // 認証情報を取得
-        final GoogleSignInAuthentication googleAuth =
-            await googleUser.authentication;
-
-        // Firebase認証に使用するCredentialを作成
-        final credential = GoogleAuthProvider.credential(
-          accessToken: googleAuth.accessToken,
-          idToken: googleAuth.idToken,
-        );
-
-        // Firebase認証を実行
-        final userCredential = await _auth.signInWithCredential(credential);
-        print("Google認証成功: ${userCredential.user}");
-      });
-
-      // 認証が成功したら現在のユーザーのUIDを返す
-      return _auth.currentUser?.uid;
+        return completer.future;
+      } else {
+        // 他のプラットフォーム向け
+        return await _currentUser.getIdToken();
+      }
     } catch (e) {
-      print("Google認証エラー: $e");
-      rethrow;
+      print('AuthService: Error getting ID token: $e');
+      return null;
     }
   }
 
+  // ユーザーがログインしているかどうか
+  bool get isUserLoggedIn => _isLoggedIn;
+
+  // 現在のユーザーのメールアドレスを取得
+  String? get userEmail => _currentUser?.email;
+
+  // サービスが初期化されているかどうか
+  bool get isInitialized => _isInitialized;
+
+  // Google認証でログイン
+  Future<String?> signInWithGoogle() async {
+    //try {
+    //  await _handleMultiFactorException(() async {
+    //    print("Google認証開始");
+//
+    //    // Google認証フロー
+    //    final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+//
+    //    if (googleUser == null) {
+    //      print("Google認証キャンセル");
+    //      return;
+    //    }
+//
+    //    // 認証情報を取得
+    //    final GoogleSignInAuthentication googleAuth =
+    //        await googleUser.authentication;
+//
+    //    // Firebase認証に使用するCredentialを作成
+    //    final credential = GoogleAuthProvider.credential(
+    //      accessToken: googleAuth.accessToken,
+    //      idToken: googleAuth.idToken,
+    //    );
+//
+    //    // Firebase認証を実行
+    //    final userCredential = await _auth.signInWithCredential(credential);
+    //    print("Google認証成功: ${userCredential.user}");
+    //  });
+//
+    //  // 認証が成功したら現在のユーザーのUIDを返す
+    //  return _auth.currentUser?.uid;
+    //} catch (e) {
+    //  print("Google認証エラー: $e");
+    //  rethrow;
+    //}
+  }
+
   // ログアウト
-  Future<void> signOut() async {
-    await _auth.signOut();
+  // サインアウト
+  Future<bool> signOut() async {
+    if (!_isInitialized) await initialize();
+
+    try {
+      if (platform.isWindows) {
+        // Windows向けにUIスレッドで実行
+        final completer = Completer<bool>();
+
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          try {
+            await _firebaseAuth.signOut();
+            _isLoggedIn = false;
+            _currentUser = null;
+            completer.complete(true);
+          } catch (e) {
+            print('AuthService: Error signing out: $e');
+            completer.complete(false);
+          }
+        });
+
+        return completer.future;
+      } else {
+        // 他のプラットフォーム向け
+        await _firebaseAuth.signOut();
+        _isLoggedIn = false;
+        _currentUser = null;
+        return true;
+      }
+    } catch (e) {
+      print('AuthService: Error signing out: $e');
+      return false;
+    }
   }
 
   // auth_service.dart に追加
@@ -146,7 +384,7 @@ class AuthService {
 
       // 電話番号認証のためのセッション作成
       // この部分は実際のUIと連携する必要があります
-      await _auth.verifyPhoneNumber(
+      await _firebaseAuth.verifyPhoneNumber(
         multiFactorSession: e.resolver.session,
         multiFactorInfo: firstPhoneHint,
         verificationCompleted: (_) {

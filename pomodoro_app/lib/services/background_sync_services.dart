@@ -1,6 +1,7 @@
 // background_sync_service.dart
 import 'dart:io';
 
+import 'package:pomodoro_app/widgets/auth_dialog.dart';
 import 'package:workmanager/workmanager.dart';
 import 'package:firebase_core/firebase_core.dart';
 import '../services/database_helper.dart';
@@ -30,7 +31,10 @@ void callbackDispatcher() {
       final settingsService = SettingsService();
       await settingsService.init();
 
-      final syncService = SyncService(databaseHelper, settingsService);
+      final AuthService authService = AuthService();
+      await authService.initialize();
+      final syncService =
+          SyncService(databaseHelper, settingsService, authService);
 
       // 同期処理（事前に取得したユーザーIDを使用）
       await syncService.syncAll(userId);

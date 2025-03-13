@@ -1,0 +1,633 @@
+# PomodoroApp 詳細仕様書（更新版）
+
+## 1. アーキテクチャ概要
+
+- **アーキテクチャパターン**: Flutter/Dart MVVM + Provider
+- **データベース**: SQLite + FFI
+- **対応プラットフォーム**: Windows + Android (クロスプラットフォーム)
+- **状態管理**: Provider + ChangeNotifier
+- **FFI**: Win32 APIとの連携（アプリ制限機能）
+- **同期機能**: Firebase Realtime Database（REST API対応）
+- **ナビゲーション**: デスクトップではNavigationRail、モバイルではBottomNavigationBar
+
+## 2. データモデル (Models)
+
+### Task
+```dart
+Task{
+  int? id;
+  String name;
+  String category;
+  String description;
+  int estimatedPomodoros;
+  int completedPomodoros;
+  DateTime createdAt;
+  DateTime updatedAt;
+  String? tickTickId;
+  String? firebaseId;
+  bool isDeleted;
+  
+  // Firebase同期メソッド
+  Map<String, dynamic> toFirebase();
+  static Task fromFirebase(Map<String, dynamic> data);
+}
+```
+
+### PomodoroSession
+```dart
+PomodoroSession{
+  int? id;
+  int taskId;
+  DateTime startTime;
+  DateTime endTime;
+  int durationMinutes;
+  bool completed;
+  double focusScore;
+  String? timeOfDay; // 時間帯カテゴリ
+  int interruptionCount; // 中断・邪魔が入った回数
+  String? mood; // セッション後の気分
+  bool isBreak; // 休憩セッションかどうか
+  String? firebaseId;
+  String? firebaseTaskId; // Firebase上の関連タスクID
+  bool isDeleted;
+  
+  // Firebase同期メソッド
+  Map<String, dynamic> toFirebase();
+  static PomodoroSession fromFirebase(Map<String, dynamic> data);
+}
+```
+
+### RestrictedApp
+```dart
+RestrictedApp{
+  int? id;
+  String name;
+  String executablePath;
+  int allowedMinutesPerDay;
+  bool isRestricted;
+  int? requiredPomodorosToUnlock;
+  int minutesPerPoint;
+  DateTime? currentSessionEnd;
+  String? firebaseId;
+  bool isDeleted;
+}
+```
+
+### RewardPoint
+```dart
+RewardPoint{
+  int? id;
+  int earnedPoints;
+  int usedPoints;
+  DateTime lastUpdated;
+  String? firebaseId;
+  int? lastSyncEarnedPoints; // 前回同期時の獲得ポイント
+  int? lastSyncUsedPoints; // 前回同期時の使用ポイント
+  bool isDeleted;
+  
+  // Firebase同期メソッド
+  Map<String, dynamic> toFirebase();
+  static RewardPoint fromFirebase(Map<String, dynamic> data);
+  
+  // 同期用マージメソッド
+  RewardPoint mergeWithRemote(RewardPoint remote);
+}
+```
+
+### AppUsageSession
+```dart
+AppUsageSession{
+  int? id;
+  int appId;
+  DateTime startTime;
+  DateTime endTime;
+  int pointsSpent;
+  String? firebaseId;
+  String? appName; // アプリ名（同期用）
+  String? appPath; // アプリパス（同期用）
+  String? remoteAppId; // リモートアプリID（同期用）
+  bool isDeleted;
+  
+  // Firebase同期メソッド
+  Map<String, dynamic> toFirebase();
+  static AppUsageSession fromFirebase(Map<String, dynamic> data);
+}
+```
+
+### DailyGoal
+```dart
+DailyGoal{
+  int? id;
+  DateTime date;
+  int targetPomodoros;
+  int achievedPomodoros;
+  bool achieved;
+  String? firebaseId;
+  bool isDeleted;
+  
+  // Firebase同期メソッド
+  Map<String, dynamic> toFirebase();
+  static DailyGoal fromFirebase(Map<String, dynamic> data);
+}
+```
+
+## 3. サービス (Services)
+
+### DatabaseHelper
+データベース管理サービス
+- **データベース初期化・マイグレーション**:
+  - `initialize()` - データベース初期化
+  - `_createDB()` - テーブルの作成とインデックス設定
+  - `_upgradeDB()` - スキーマアップグレード処理（v1からv6）
+  - `_manualMigration()` - 既存インストール向けのスキーマ修正
+
+- **データ取得メソッド**:
+  - `getTasks()` - 論理削除されていないタスク一覧取得
+  - `getTasksChangedSince(DateTime timestamp)` - 指定日時以降に変更されたタスク取得
+  - `getSessionsChangedSince(DateTime timestamp)` - 指定日時以降に変更されたセッション取得
+  - `getRestrictedApps()` - 制限アプリ一覧の取得
+  - `getRestrictedAppByName(String name)` - 名前による制限アプリ検索
+
+- **データ操作メソッド**:
+  - `insertTask(Task task)` - タスク新規挿入
+  - `updateTask(Task task)` - タスク更新
+  - `insertSession(PomodoroSession session)` - セッション新規挿入
+  - `updateSession(PomodoroSession session)` - セッション更新
+  - `updateRewardPoints(RewardPoint points)` - ポイント更新
+
+- **統計データメソッド**:
+  - `getTimeOfDayStatistics(int days)` - 時間帯別統計
+  - `getLongTermTrendData(String timeFrame)` - 長期トレンドデータ取得
+  - `getHabitFormationStats()` - 習慣形成統計
+  - `getTaskEfficiencyData()` - タスク効率分析
+  - `getWeekdayEfficiencyData()` - 曜日別効率データ
+  - `getAllSessionsForExport()` - エクスポート用セッションデータ
+
+- **日次目標管理**:
+  - `insertDailyGoal(DailyGoal goal)` - 目標追加
+  - `updateDailyGoal(DailyGoal goal)` - 目標更新
+  - `getOrCreateTodayGoal(int defaultTarget)` - 今日の目標取得/作成
+  - `updateDailyGoalAchievement(DailyGoal goal)` - 目標達成状況更新
+
+### SyncService
+Firebase同期サービス
+- **プラットフォーム検出と適応的同期**:
+  - Windows向けにREST API実装
+  - モバイル向けにネイティブSDK実装
+  - プラットフォームに応じた同期方法の自動選択
+
+- **同期メソッド**:
+  - `syncAll()` - すべてのデータを同期
+  - `syncTasks(DateTime lastSyncTime)` - タスクの同期（タイムスタンプ比較）
+  - `syncSessions(DateTime lastSyncTime)` - セッションの同期
+  - `syncRewardPoints(DateTime lastSyncTime)` - ポイントの同期
+  - `syncAppUsageSessions(DateTime lastSyncTime)` - アプリ使用セッションの同期
+  - `syncRestrictedApps(DateTime lastSyncTime)` - 制限アプリの同期
+
+- **同期フロー制御**:
+  - 依存関係に基づいた順序付け（タスク→セッション）
+  - 時間ベースの重複検出（startTime+endTimeの複合キー）
+  - 部分的な失敗からの回復（エラーハンドリング）
+
+- **データ整合性管理**:
+  - `_handleConflicts()` - 同期競合の解決
+  - firebaseIdを使用した一意のマッピング
+  - 増分同期によるポイント管理
+
+### FirebaseRESTService
+Windows向けのREST API実装
+- **基本メソッド**:
+  - `getData(path)` - データ取得
+  - `saveData(path, data)` - データ保存
+  - `updateData(path, data)` - データ更新
+  - `deleteData(path)` - データ削除
+  - `pushData(path, data)` - データプッシュ（Firebase キー生成）
+
+- **認証サポート**:
+  - トークンベースのREST API認証（?auth=$token）
+  - 認証トークン管理
+
+### AuthService
+Firebase認証サービス
+- **プラットフォーム対応認証**:
+  - `initialize()` - 認証初期化
+  - `signInWithEmailAndPassword()` - Eメール/パスワード認証
+  - `registerWithEmailAndPassword()` - ユーザー登録
+  - `googleSignIn()` - Google認証（オプション）
+  - `signOut()` - ログアウト
+
+- **UIスレッド処理**:
+  - Windows向けのUIスレッドハンドリング
+  - Completerパターンを使用した安全な認証
+
+### FirebaseConfig
+Firebase設定管理
+- `initialize()` - Firebase初期化
+- プラットフォーム固有の設定
+  - Windows向けのウェブクライアント設定
+  - Android向けのネイティブ設定
+
+### NetworkConnectivity
+ネットワーク接続状態の監視
+- ネットワーク状態の監視
+- オフライン時の同期キューイング
+
+### NotificationService
+通知管理サービス
+- システム通知（ポモドーロ完了、休憩終了など）
+- アプリ内通知（SnackBarとDialog）
+- 通知許可の取得と管理
+
+### SoundService
+音声再生管理
+- ポモドーロ完了音
+- 休憩終了音
+- 音声の有効/無効設定
+- 音量制御
+
+### SettingsService
+アプリ設定の一元管理
+- **同期設定**:
+  - 同期有効/無効
+  - 同期間隔設定
+- **その他設定**:
+  - ポモドーロ時間設定
+  - 通知/音声設定
+  - テーマ設定
+  - TickTick連携設定
+
+### PlatformUtils
+プラットフォーム検出と適応
+- Windows/Android/iOS検出
+- プラットフォーム固有機能の抽象化
+- AppPlatformServiceの提供
+
+### BackgroundService
+バックグラウンド処理
+- 制限アプリのモニタリング
+- 通知スケジュール管理
+- アプリ解除時間の期限切れ監視
+
+### WindowsBackgroundService
+Windowsバックグラウンド処理
+- アプリ制限情報の同期
+- バックグラウンド監視の有効化/無効化
+- システムトレイとの連携
+
+### WindowsSystemTrayService
+Windowsシステムトレイ管理
+- システムトレイアイコンの表示
+- コンテキストメニューの提供
+- ウィンドウ管理との連携
+
+### TickTickService
+TickTick外部APIとの連携
+- OAuth2認証
+- タスク同期
+- プロジェクト取得
+- プロジェクト別タスクインポート
+
+### ExportService
+データエクスポート
+- セッションデータのCSV出力
+- ファイル共有
+- エクスポート設定
+
+### BackgroundSyncService
+バックグラウンド同期処理
+- バックグラウンドでの同期実行
+- サービス管理
+
+## 4. プロバイダー (Providers)
+
+### SyncProvider
+同期状態管理
+- **同期制御**:
+  - `periodicSync()` - 定期的な自動同期
+  - `syncNow()` - 手動同期実行
+  - `_checkSyncState()` - 同期状態チェック
+
+- **同期状態通知**:
+  - 同期完了リスナー登録機能
+  - UI更新用コールバック管理
+  - 前回同期日時の追跡
+
+- **プラットフォーム対応**:
+  - プラットフォーム検出
+  - 適切な同期サービスの選択
+
+### PomodoroProvider
+ポモドーロタイマー管理
+- タイマー状態管理
+- セッション記録
+- 集中度計算
+- **タスク参照保持**:
+  - `startTimer(Task task)` - タスク情報の最新化処理
+  - `_refreshCurrentTask()` - 現在タスクの更新
+
+### TaskProvider
+タスク管理
+- タスクのCRUD操作
+- フィルタリング
+- TickTick連携
+- **同期後更新**:
+  - 同期完了リスナー実装
+  - タスクリストの自動更新
+
+### AppRestrictionProvider
+アプリ制限機能管理
+- 制限アプリのモニタリング
+- ポイント管理
+- アプリ使用セッション管理
+- コイン使用後の制限解除時間管理
+- **バックグラウンド連携**:
+  - `prepareForAppClosure()` - アプリ閉じる時の処理
+  - `_syncRestrictedAppsWithBackgroundService()` - 情報同期
+
+### ThemeProvider
+UIテーマ管理
+- ライト/ダークテーマ切替
+- テーマ設定の永続化
+
+### TickTickProvider
+TickTick連携管理
+- 認証管理
+- タスクインポート
+- プロジェクト選択
+
+## 5. 画面 (Screens)
+
+### HomeScreen
+メインホーム画面
+- ポモドーロタイマー表示
+- 現在のタスク表示
+- ポイント表示
+- 日次進捗表示
+
+### TasksScreen
+タスク管理画面
+- タスク一覧表示・フィルタリング
+- タスク追加/編集/削除
+- カテゴリ別フィルタリング
+- タスク検索機能
+
+### StatisticsScreen
+統計分析画面
+- 短期分析タブ (ShortTermAnalysisTab)
+- トレンド分析タブ (TrendAnalysisTab)
+- 詳細分析タブ (DetailedAnalysisTab)
+- セッション履歴タブ (SessionHistoryTab)
+- データエクスポート機能
+
+### SettingsScreen
+設定画面
+- タイマー設定
+- 通知/音声設定
+- テーマ設定
+- TickTick連携設定
+- 同期設定
+
+### SyncSettingScreen
+同期設定画面
+- Firebase同期の有効化/無効化
+- 同期間隔の設定
+- 同期履歴の表示
+- 手動同期ボタン
+- 認証管理
+
+### LoginScreen
+Firebase認証画面
+- メール/パスワードログイン
+- アカウント登録
+- Google認証（オプション）
+- エラーハンドリング
+- プラットフォーム固有実装
+
+### AppStoreScreen
+アプリストア画面
+- アプリストアタブ (制限アプリ一覧、解除機能)
+- 設定タブ (制限機能管理)
+- 履歴タブ (アプリ使用履歴)
+- ポイント管理機能
+
+### AppRestrictionScreen
+アプリ制限設定画面
+- 制限アプリ一覧
+- 制限設定管理
+
+### AndroidAppSelectionScreen
+Android向けアプリ選択画面
+- インストール済みアプリ一覧
+- 制限対象アプリ選択
+
+### PermissionGuideScreen
+権限ガイド画面
+- 必要権限の説明
+- 権限取得ガイド
+
+### TickTickSyncScreen
+TickTick連携画面
+- 認証設定
+- プロジェクト選択インポート
+- 同期設定
+
+### TimeOfDayAnalysisScreen
+時間帯分析画面
+- 時間帯別統計表示
+- 生産性分析
+
+## 6. ウィジェット (Widgets)
+
+### PomodoroTimer
+ポモドーロタイマー表示ウィジェット
+- 残り時間表示
+- プログレスリング
+- 開始/停止/スキップボタン
+
+### TaskSelection
+タスク選択ウィジェット
+- カテゴリフィルター
+- タスク一覧
+- 進捗表示
+
+### DailyProgress
+日次進捗表示ウィジェット
+- 目標達成状況
+- ポモドーロ完了数
+- 学習時間表示
+
+### PointSummary
+ポイント表示ウィジェット
+- 利用可能ポイント
+- 獲得/使用ポイント
+- アプリストアへのリンク
+
+### AddAppDialog
+アプリ追加ダイアログウィジェット
+- アプリ名
+- 実行ファイルパス
+- ポイントコスト設定
+
+### AuthDialog
+認証ダイアログウィジェット
+- ログイン/登録フォーム
+- エラー表示
+- 認証オプション
+
+### ProjectSelectionDialog
+TickTickプロジェクト選択ダイアログ
+- プロジェクト一覧表示
+- インポートオプション
+
+### BatterySaverDialog
+バッテリー最適化除外ダイアログ
+- バッテリー最適化設定画面へのリンク
+- 設定手順のガイド表示
+- 後で通知する/スキップオプション
+
+### AppRestrictOverlay
+制限アプリ警告オーバーレイ（Android用）
+- 制限アプリ検出時に表示
+- コインによる制限解除オプション
+- アプリ終了オプション
+- センター配置と外部タッチ検出
+
+### AppIcon
+アプリアイコン表示ウィジェット
+- プラットフォーム対応アイコン表示
+
+### チャート関連ウィジェット
+- TimeOfDayAnalysis - 時間帯別生産性分析
+- TaskEfficiencyChart - タスク効率分析
+- CategoryChart - カテゴリ別円グラフ
+- WeeklyStatisticsChart - 週別統計チャート
+- DailyStatisticsChart - 日別統計チャート
+- HeatMapCalendar - カレンダーヒートマップ
+- LongTermTrend - 長期トレンド分析
+- HabitScoreCard - 習慣形成スコア表示
+
+## 7. プラットフォーム固有実装
+
+### Android実装
+
+#### AndroidAppController
+- UsageStatsManagerを利用したアプリ使用状況の監視
+- オーバーレイUIの制御（中央配置、外部タッチで閉じる）
+- 制限アプリの警告通知
+
+### Windows実装
+
+#### WindowsAppController
+- Win32 APIを使用したプロセス管理
+- レジストリ自動起動設定
+- Isolateを使用したバックグラウンド監視
+- ファイルロックによる重複インスタンス防止
+- プロセスリスト取得と制限アプリの監視
+- プロセス強制終了機能
+
+## 8. Firebase連携
+
+### Firebase実装概要
+- クロスプラットフォーム対応（SDK + REST API）
+- ネイティブSDK: Android向け
+- REST API: Windows向け
+
+### 認証フロー
+- メール/パスワード認証
+- 認証情報の安全な保存
+- 必要時のみ認証要求（同期開始時）
+- プラットフォーム固有のスレッド処理
+
+### 同期処理フロー
+1. ユーザー認証確認
+2. ネットワーク状態確認
+3. プラットフォーム検出と適切なAPI選択
+4. タスク同期（ローカル→リモート、リモート→ローカル）
+5. セッション同期（タスク参照の整合性確保）
+6. ポイント同期（増分計算による整合性確保）
+7. 制限アプリ同期
+8. アプリ使用セッション同期
+9. 同期完了通知（UIリフレッシュ）
+
+### データマッピング
+- ローカルID ↔ Firebase ID のマッピング管理
+- Firebase IDはローカルのみ保存（Firebase上には保存しない）
+- 新規エントリ: push()で生成したIDを保存
+- 既存エントリ: child(entity.firebaseId!).set()で更新
+
+### 競合解決
+- 時間ベースの重複検出
+- タスク依存関係の維持
+- ポイント増分計算による競合解決
+
+## 9. バックグラウンド処理とシステムトレイ連携
+
+### Windows向け実装
+- WindowManagerを使用したライフサイクル管理
+- ウィンドウ閉じるボタンでの最小化（完全終了しない）
+- アプリ終了時の確認ダイアログ実装
+- システムトレイアイコン表示と状態表示
+- クリックでウィンドウ復元
+
+### Android向け実装
+- 前景サービスによるバックグラウンド実行
+- バッテリー最適化除外要求
+- アプリ使用状況の監視
+
+### 共通機能
+- アプリ制限情報の同期
+- アプリ解除時間監視の継続
+- ウィンドウ状態とバックグラウンド処理の連携
+
+## 10. データベース構造
+
+### データベーススキーマ
+- tasks: タスク管理
+- pomodoro_sessions: ポモドーロセッション記録
+- restricted_apps: 制限アプリ設定
+- reward_points: ポイント管理
+- app_usage_sessions: アプリ使用セッション記録
+- daily_goals: 日次目標管理
+
+### マイグレーション管理
+- v1→v2: ポイント関連テーブル追加
+- v2→v3: セッション拡張フィールド追加
+- v3→v4: Firebase同期フィールド追加
+- v4→v5: ポモドーロセッションにfirebaseTaskId追加
+- v5→v6: ポイント管理拡張（lastSyncEarnedPoints/lastSyncUsedPoints）
+
+### インデックス最適化
+- taskId, startTime, firebaseId など主要検索フィールドのインデックス化
+- 複合インデックスによる検索パフォーマンス向上
+
+## 11. テスト構成
+
+### ユニットテスト
+- Firebase REST APIテスト
+- データ変換・マッピングテスト
+
+### 結合テスト
+- 同期フローテスト
+- プラットフォーム固有実装テスト
+
+## 12. プロジェクトファイル構造
+
+```
+lib/
+    firebase_options.dart
+    main.dart
+    models/          # データモデル
+    platforms/       # プラットフォーム固有実装
+        android/
+        windows/
+    providers/       # 状態管理
+    screens/         # UI画面
+        statistics_tab/
+        sync/
+    services/        # サービス層
+        firebase/
+        windows_background/
+    test/            # テスト
+    utils/           # ユーティリティ
+    widgets/         # 再利用可能UI
+```

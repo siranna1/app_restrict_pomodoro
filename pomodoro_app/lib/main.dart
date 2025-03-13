@@ -32,6 +32,7 @@ import 'services/firebase/sync_service.dart';
 import 'services/network_connectivity.dart';
 import 'services/background_sync_services.dart';
 import 'screens/ticktick_sync_screen.dart';
+import 'test/firebase_rest_test.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -49,10 +50,8 @@ void main() async {
   final backgroundSyncService = BackgroundSyncService();
 
   final authService = AuthService();
-  final syncService = SyncService(
-    databaseHelper,
-    settingsService,
-  );
+  authService.initialize();
+  final syncService = SyncService(databaseHelper, settingsService, authService);
   final networkConnectivity = NetworkConnectivity();
 
   // Windowsの場合、バックグラウンドサービスを初期化
@@ -189,6 +188,7 @@ class MyApp extends StatelessWidget {
           '/settings': (context) => const SettingsScreen(),
           '/app_store': (context) => const AppStoreScreen(),
           '/ticktick_sync': (context) => const TickTickSyncScreen(),
+          '/test': (context) => const FirebaseRestTest(),
         },
       ),
     );

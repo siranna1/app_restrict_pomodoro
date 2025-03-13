@@ -173,6 +173,9 @@ class AppRestrictionProvider with ChangeNotifier {
         print("${app.name}の解除期限が切れていたため、制限状態に戻しました");
       } else {
         // 通常のアプリを追加
+        if (app.executablePath != "unknown") {
+          apps.add(app);
+        }
         apps.add(app);
       }
     }

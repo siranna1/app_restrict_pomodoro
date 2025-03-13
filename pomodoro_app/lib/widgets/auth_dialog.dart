@@ -37,12 +37,12 @@ class _AuthDialogState extends State<AuthDialog> {
       String? userId;
 
       if (_isLogin) {
-        userId = await authService.signInWithEmailPassword(
+        userId = await authService.signInWithEmailAndPassword(
           _emailController.text.trim(),
           _passwordController.text,
         );
       } else {
-        userId = await authService.registerWithEmailPassword(
+        userId = await authService.registerWithEmailAndPassword(
           _emailController.text.trim(),
           _passwordController.text,
         );
