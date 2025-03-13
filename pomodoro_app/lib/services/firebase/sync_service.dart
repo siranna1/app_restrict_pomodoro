@@ -19,6 +19,7 @@ class SyncService {
   // タスク同期 - 改良版
   Future<void> syncTasks(String userId) async {
     try {
+      print("同期開始");
       final tasksRef = _database.child('users/$userId/tasks');
 
       // 前回の同期タイムスタンプ取得
@@ -35,8 +36,9 @@ class SyncService {
       }
 
       // Firebaseからタスクを取得
-      final event = await tasksRef.once();
-      final snapshot = event.snapshot;
+      final snapshot = await tasksRef.get();
+      print("同期中");
+      //final snapshot = event.snapshot;
 
       Map<String, dynamic> remoteTasks = {};
 

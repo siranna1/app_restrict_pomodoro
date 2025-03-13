@@ -8,6 +8,7 @@ import '../../widgets/auth_dialog.dart';
 import '../../services/firebase/auth_service.dart';
 import '../../services/settings_service.dart';
 import '../../utils/platform_utils.dart';
+import 'login_screen.dart';
 
 class SyncSettingScreen extends StatelessWidget {
   @override
@@ -125,7 +126,7 @@ class SyncSettingScreen extends StatelessWidget {
                 // 未認証の場合は認証ダイアログを表示
                 final result = await showDialog<bool>(
                   context: context,
-                  builder: (context) => AuthDialog(),
+                  builder: (context) => LoginScreen(),
                 );
 
                 if (result == true) {

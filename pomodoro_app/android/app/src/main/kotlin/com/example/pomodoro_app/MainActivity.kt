@@ -53,4 +53,9 @@ class MainActivity: FlutterActivity() {
         unregisterReceiver(expirationReceiver)
         super.onDestroy()
     }
+    // override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+    // // ここを追加
+    // super.onActivityResult(requestCode, resultCode, data);
+    // // ここで色々する
+    // }
 }

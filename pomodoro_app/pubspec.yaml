@@ -51,13 +51,15 @@ dependencies:
   syncfusion_flutter_charts: ^22.2.10
   image: ^4.0.0
   app_links: ^6.4.0
+  workmanager: ^0.5.2
 
   # Firebase
-  firebase_core: ^2.31.1
-  firebase_database: ^10.2.4
-  firebase_auth: ^4.20.0
+  firebase_core: ^3.12.1
+  firebase_database: ^11.3.4
+  firebase_auth: ^5.5.1
   connectivity_plus: ^4.0.2
-  workmanager: ^0.5.2
+  google_sign_in: ^6.1.4 
+  collection: ^1.17.0
   
 
 
@@ -95,6 +97,7 @@ flutter:
     - assets/images/
     - assets/icon/
     - assets/sounds/
+    - assets/google_logo.png
   
   # フォント設定
   fonts:

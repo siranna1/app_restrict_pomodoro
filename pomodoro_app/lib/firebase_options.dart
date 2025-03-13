@@ -51,7 +51,8 @@ class DefaultFirebaseOptions {
     appId: '1:931892292987:android:6483bf9d68ee0af9b4a1de',
     messagingSenderId: '931892292987',
     projectId: 'pomodoroappsync',
-    databaseURL: 'https://pomodoroappsync-default-rtdb.asia-southeast1.firebasedatabase.app',
+    databaseURL:
+        'https://pomodoroappsync-default-rtdb.asia-southeast1.firebasedatabase.app',
     storageBucket: 'pomodoroappsync.firebasestorage.app',
   );
 
@@ -60,19 +61,22 @@ class DefaultFirebaseOptions {
     appId: '1:931892292987:ios:91df35eecd316a53b4a1de',
     messagingSenderId: '931892292987',
     projectId: 'pomodoroappsync',
-    databaseURL: 'https://pomodoroappsync-default-rtdb.asia-southeast1.firebasedatabase.app',
+    databaseURL:
+        'https://pomodoroappsync-default-rtdb.asia-southeast1.firebasedatabase.app',
     storageBucket: 'pomodoroappsync.firebasestorage.app',
+    iosClientId:
+        '931892292987-pon6n21gfj9pkhoas8ker63d8gh0eem2.apps.googleusercontent.com',
     iosBundleId: 'com.example.pomodoroApp',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyDGzmWpHli-Kc9038OquP-OQ6qt8Jic7EU',
-    appId: '1:931892292987:web:3d1e69056df960deb4a1de',
-    messagingSenderId: '931892292987',
-    projectId: 'pomodoroappsync',
-    authDomain: 'pomodoroappsync.firebaseapp.com',
-    databaseURL: 'https://pomodoroappsync-default-rtdb.asia-southeast1.firebasedatabase.app',
-    storageBucket: 'pomodoroappsync.firebasestorage.app',
-    measurementId: 'G-JCXF4KY4ZN',
-  );
+      apiKey: "AIzaSyDGzmWpHli-Kc9038OquP-OQ6qt8Jic7EU",
+      authDomain: "pomodoroappsync.firebaseapp.com",
+      databaseURL:
+          "https://pomodoroappsync-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "pomodoroappsync",
+      storageBucket: "pomodoroappsync.firebasestorage.app",
+      messagingSenderId: "931892292987",
+      appId: "1:931892292987:web:3d1e69056df960deb4a1de",
+      measurementId: "G-JCXF4KY4ZN");
 }
