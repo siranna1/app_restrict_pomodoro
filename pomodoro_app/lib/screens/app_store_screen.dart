@@ -149,7 +149,7 @@ class AppStoreTab extends StatelessWidget {
         builder: (context, appRestrictionProvider, child) {
       final appRestrictionProvider =
           Provider.of<AppRestrictionProvider>(context);
-      final restrictedApps = appRestrictionProvider.restrictedApps;
+      final restrictedApps = appRestrictionProvider.restrictedAppsForDisplay;
 
       if (restrictedApps.isEmpty) {
         return Center(
@@ -559,9 +559,10 @@ class SettingsTab extends StatelessWidget {
           ListView.builder(
             shrinkWrap: true,
             physics: NeverScrollableScrollPhysics(),
-            itemCount: appRestrictionProvider.restrictedApps.length,
+            itemCount: appRestrictionProvider.restrictedAppsForDisplay.length,
             itemBuilder: (context, index) {
-              final app = appRestrictionProvider.restrictedApps[index];
+              final app =
+                  appRestrictionProvider.restrictedAppsForDisplay[index];
               return ListTile(
                 title: Text(app.name),
                 subtitle: Text(app.executablePath),
@@ -940,13 +941,13 @@ class HistoryTab extends StatelessWidget {
           itemCount: sessions.length,
           itemBuilder: (context, index) {
             final session = sessions[index];
-
+            final name = session.appName;
             // アプリ情報を取得
             final appProvider = Provider.of<AppRestrictionProvider>(context);
             final app = appProvider.restrictedApps.firstWhere(
               (app) => app.id == session.appId,
               orElse: () => RestrictedApp(
-                name: '不明なアプリ',
+                name: '別端末のアプリ: $name',
                 executablePath: '',
                 allowedMinutesPerDay: 0,
                 isRestricted: false,

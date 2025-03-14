@@ -24,6 +24,7 @@ class AppRestrictionProvider with ChangeNotifier {
   bool get needsPermissionGuide => _needsPermissionGuide;
   bool isMonitoring = false;
   List<RestrictedApp> restrictedApps = [];
+  List<RestrictedApp> restrictedAppsForDisplay = [];
   Timer? _unlockExpirationTimer; //アプリ解除後の残り時間確認用タイマー
   // late を削除し、初期値を設定
   RewardPoint rewardPoints = RewardPoint(
@@ -144,16 +145,23 @@ class AppRestrictionProvider with ChangeNotifier {
   }
 
   Future<void> _loadRestrictedApps() async {
-    final db = await DatabaseHelper.instance.database;
-    final results = await db.query('restricted_apps');
+    final db = DatabaseHelper.instance;
+    final results = await db.getRestrictedApps();
 
     // 現在時刻を取得
     final now = DateTime.now();
 
     // アプリごとに期限チェックしつつリストを作成
     List<RestrictedApp> apps = [];
-    for (var map in results) {
-      final app = RestrictedApp.fromMap(map);
+    final seenPaths = <String>{}; // 同じパスが2回登録されないようにするためのセット
+    for (var app in results) {
+      //final app = RestrictedApp.fromMap(map);
+      final path = app.executablePath;
+      // すでに同じパスのアプリが追加されていたらスキップ
+      if (seenPaths.contains(path)) {
+        continue;
+      }
+      seenPaths.add(path);
 
       // 解除中だが期限切れの場合は制限状態に戻す
       if (app.isCurrentlyUnlocked &&
@@ -161,26 +169,25 @@ class AppRestrictionProvider with ChangeNotifier {
           now.isAfter(app.currentSessionEnd!)) {
         // 期限切れなので更新
         final updatedApp = app.copyWith(currentSessionEnd: null);
-        await db.update(
-          'restricted_apps',
-          updatedApp.toMap(),
-          where: 'id = ?',
-          whereArgs: [app.id],
-        );
+        await db.updateRestrictedApp(app);
+        // await db.update(
+        //   'restricted_apps',
+        //   updatedApp.toMap(),
+        //   where: 'id = ?',
+        //   whereArgs: [app.id],
+        // );
 
         // 更新したアプリを追加
         apps.add(updatedApp);
         print("${app.name}の解除期限が切れていたため、制限状態に戻しました");
       } else {
-        // 通常のアプリを追加
-        if (app.executablePath != "unknown") {
-          apps.add(app);
-        }
         apps.add(app);
       }
     }
 
     restrictedApps = apps;
+    restrictedAppsForDisplay = await db.getDisplayableRestrictedApps();
+    print(restrictedAppsForDisplay.length);
     notifyListeners();
 
     // サービスに最新の状態を通知
@@ -411,9 +418,32 @@ class AppRestrictionProvider with ChangeNotifier {
   }
 
   // 制限対象アプリを削除
-  Future<void> removeRestrictedApp(int id) async {
-    await _windowsAppController.removeRestrictedApp(id);
-    await _loadRestrictedApps();
+  Future<bool> removeRestrictedApp(int id) async {
+    try {
+      print("ポモドーロセッション論理削除開始: ID=$id");
+
+      // IDが存在することを確認
+      if (id == 0) {
+        print("エラー: セッションIDが無効です");
+        return false;
+      }
+
+      // 論理削除を実行
+      final result = await DatabaseHelper.instance.softDeleteRestrictedApp(id);
+
+      if (result > 0) {
+        print("ポモドーロセッション論理削除完了: ID=$id");
+        await _windowsAppController.removeRestrictedApp(id);
+        await _loadRestrictedApps();
+        return true;
+      } else {
+        print("ポモドーロセッション論理削除失敗: ID=$id");
+        return false;
+      }
+    } catch (e) {
+      print("アプリ削除中にエラーが発生しました: $e");
+      return false;
+    }
   }
 
   // ポモドーロ完了時に呼び出し - ポイント獲得
@@ -486,6 +516,24 @@ class AppRestrictionProvider with ChangeNotifier {
       return true;
     } catch (e) {
       print('アプリ解除中にエラーが発生: $e');
+      return false;
+    }
+  }
+
+// 重複した制限アプリを整理するメソッド
+  Future<bool> removeDuplicateRestrictedApps() async {
+    try {
+      print("重複アプリ整理開始");
+
+      await DatabaseHelper.instance.removeDuplicateRestrictedApps();
+
+      // 削除後にリストを再読み込み
+      await _loadRestrictedApps();
+
+      print("重複アプリ整理完了");
+      return true;
+    } catch (e) {
+      print("重複アプリ整理中にエラーが発生しました: $e");
       return false;
     }
   }

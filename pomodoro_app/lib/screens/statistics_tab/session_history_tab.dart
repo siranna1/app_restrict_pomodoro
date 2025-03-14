@@ -1,6 +1,8 @@
 // tabs/session_history_tab.dart
 import 'package:flutter/material.dart';
 import '../../services/database_helper.dart';
+import '../../providers/app_restriction_provider.dart';
+import 'package:provider/provider.dart';
 
 class SessionHistoryTab extends StatefulWidget {
   const SessionHistoryTab({Key? key}) : super(key: key);
@@ -27,7 +29,8 @@ class _SessionHistoryTabState extends State<SessionHistoryTab> {
 
     try {
       // 日付降順でセッションデータを取得
-      final sessions = await DatabaseHelper.instance.getAllSessionsForExport();
+      final sessions =
+          await DatabaseHelper.instance.getSessionHistoryWithTaskInfo();
       setState(() {
         _sessionData = sessions;
         _isLoading = false;
@@ -168,121 +171,203 @@ class _SessionHistoryTabState extends State<SessionHistoryTab> {
     );
   }
 
+  // セッションを削除
+  Future<void> _deleteSession(int sessionId) async {
+    try {
+      int success =
+          await DatabaseHelper.instance.softDeletePomodoroSession(sessionId);
+      //final success = await provider.removeRestrictedApp(sessionId);
+
+      if (success != 0) {
+        // 削除成功
+        setState(() {
+          _sessionData.removeWhere((session) => session['id'] == sessionId);
+        });
+      } else {
+        // 削除失敗
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('セッションの削除に失敗しました')),
+          );
+        }
+      }
+    } catch (e) {
+      print('セッション削除エラー: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('エラーが発生しました: $e')),
+        );
+      }
+    }
+  }
+
   // セッションカードの構築
   Widget _buildSessionCard(Map<String, dynamic> session) {
     final isBreak = session['isBreak'] == 1;
     final completed = session['completed'] == 1;
 
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-      elevation: 1,
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // 上部: タスク名とセッションタイプ
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    isBreak ? '休憩時間' : (session['taskName'] ?? '名称なし'),
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: isBreak ? Colors.green : Colors.black,
-                    ),
-                  ),
-                ),
-                // セッションタイプ表示
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 8.0, vertical: 4.0),
-                  decoration: BoxDecoration(
-                    color: isBreak
-                        ? Colors.green[100]
-                        : (completed == 1 ? Colors.blue[100] : Colors.red[100]),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    isBreak ? '休憩' : (completed == 1 ? '完了' : '中断'),
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: isBreak
-                          ? Colors.green[800]
-                          : (completed == 1
-                              ? Colors.blue[800]
-                              : Colors.red[800]),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 8),
-
-            // 時間情報
-            Row(
-              children: [
-                Icon(Icons.access_time, size: 16, color: Colors.grey[600]),
-                const SizedBox(width: 4),
-                Text(
-                  '${_formatTime(session['startTime'])} - ${_formatTime(session['endTime'])}',
-                  style: TextStyle(color: Colors.grey[700]),
-                ),
-                const SizedBox(width: 16),
-                Text(
-                  '${session['durationMinutes']}分',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 4),
-
-            // タスクカテゴリ（休憩以外）
-            if (!isBreak && session['taskCategory'] != null)
-              Chip(
-                label: Text(
-                  session['taskCategory'],
-                  style: const TextStyle(fontSize: 12),
-                ),
-                backgroundColor: Colors.grey[200],
-                padding: EdgeInsets.zero,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    return Dismissible(
+      key: Key('session_${session['id']}'),
+      background: Container(
+        color: Colors.red,
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        child: const Icon(
+          Icons.delete,
+          color: Colors.white,
+        ),
+      ),
+      direction: DismissDirection.endToStart,
+      confirmDismiss: (direction) async {
+        return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('セッションを削除'),
+            content: const Text('このポモドーロセッションを削除しますか？'),
+            actions: [
+              TextButton(
+                child: const Text('キャンセル'),
+                onPressed: () => Navigator.of(context).pop(false),
               ),
-
-            // 集中度スコアなどの詳細情報（休憩以外）
-            if (!isBreak) ...[
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  if (session['focusScore'] != null) ...[
-                    _buildInfoItem(
-                      '集中度',
-                      '${(session['focusScore'] as double).toStringAsFixed(1)}%',
-                      icon: Icons.psychology,
-                    ),
-                    const SizedBox(width: 16),
-                  ],
-                  if (session['interruptionCount'] != null) ...[
-                    _buildInfoItem(
-                      '中断',
-                      '${session['interruptionCount']}回',
-                      icon: Icons.notifications_active,
-                    ),
-                    const SizedBox(width: 16),
-                  ],
-                  if (session['timeOfDay'] != null)
-                    _buildInfoItem(
-                      '時間帯',
-                      _getTimeOfDayLabel(session['timeOfDay']),
-                      icon: Icons.wb_sunny,
-                    ),
-                ],
+              TextButton(
+                child: const Text('削除'),
+                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                onPressed: () => Navigator.of(context).pop(true),
               ),
             ],
-          ],
+          ),
+        );
+      },
+      onDismissed: (direction) {
+        // セッション削除のコールバックを呼び出す
+        _deleteSession(session['id']);
+        // フィードバックを表示
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('ポモドーロセッションを削除しました'),
+            //action: SnackBarAction(
+            //  label: '元に戻す',
+            //  onPressed: () {
+            //    // TODO: 元に戻す機能の実装（必要に応じて）
+            //    //_loadSessions();
+            //  },
+            //),
+          ),
+        );
+      },
+      child: Card(
+        margin: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+        elevation: 1,
+        child: Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 上部: タスク名とセッションタイプ
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      isBreak ? '休憩時間' : (session['taskName'] ?? '名称なし'),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: isBreak ? Colors.green : Colors.black,
+                      ),
+                    ),
+                  ),
+                  // セッションタイプ表示
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8.0, vertical: 4.0),
+                    decoration: BoxDecoration(
+                      color: isBreak
+                          ? Colors.green[100]
+                          : (completed == 1
+                              ? Colors.blue[100]
+                              : Colors.red[100]),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      isBreak ? '休憩' : (completed == 1 ? '完了' : '中断'),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isBreak
+                            ? Colors.green[800]
+                            : (completed == 1
+                                ? Colors.blue[800]
+                                : Colors.red[800]),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 8),
+
+              // 時間情報
+              Row(
+                children: [
+                  Icon(Icons.access_time, size: 16, color: Colors.grey[600]),
+                  const SizedBox(width: 4),
+                  Text(
+                    '${_formatTime(session['startTime'])} - ${_formatTime(session['endTime'])}',
+                    style: TextStyle(color: Colors.grey[700]),
+                  ),
+                  const SizedBox(width: 16),
+                  Text(
+                    '${session['durationMinutes']}分',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 4),
+
+              // タスクカテゴリ（休憩以外）
+              if (!isBreak && session['taskCategory'] != null)
+                Chip(
+                  label: Text(
+                    session['taskCategory'],
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  backgroundColor: Colors.grey[200],
+                  padding: EdgeInsets.zero,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+
+              // 集中度スコアなどの詳細情報（休憩以外）
+              if (!isBreak) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    if (session['focusScore'] != null) ...[
+                      _buildInfoItem(
+                        '集中度',
+                        '${(session['focusScore'] as double).toStringAsFixed(1)}%',
+                        icon: Icons.psychology,
+                      ),
+                      const SizedBox(width: 16),
+                    ],
+                    if (session['interruptionCount'] != null) ...[
+                      _buildInfoItem(
+                        '中断',
+                        '${session['interruptionCount']}回',
+                        icon: Icons.notifications_active,
+                      ),
+                      const SizedBox(width: 16),
+                    ],
+                    if (session['timeOfDay'] != null)
+                      _buildInfoItem(
+                        '時間帯',
+                        _getTimeOfDayLabel(session['timeOfDay']),
+                        icon: Icons.wb_sunny,
+                      ),
+                  ],
+                ),
+              ],
+            ],
+          ),
         ),
       ),
     );

@@ -11,6 +11,8 @@ import 'dart:io' show Platform;
 import '../models/daily_goal.dart';
 import 'dart:async';
 import 'dart:math';
+import 'package:uuid/uuid.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._init();
@@ -61,7 +63,7 @@ class DatabaseHelper {
     print(path);
     return await openDatabase(
       path,
-      version: 7,
+      version: 8,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
     );
@@ -98,6 +100,8 @@ class DatabaseHelper {
       mood TEXT,
       isBreak INTEGER DEFAULT 0,
       firebaseId TEXT,
+      isDeleted INTEGER DEFAULT 0,
+      updatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (taskId) REFERENCES tasks (id) ON DELETE CASCADE
     )
   ''');
@@ -113,7 +117,12 @@ class DatabaseHelper {
       pointCostPerHour INTEGER DEFAULT 2,
       minutesPerPoint INTEGER DEFAULT 30,
       currentSessionEnd TEXT,
-      firebaseId TEXT
+      firebaseId TEXT,
+      deviceId TEXT,
+      platformType TEXT,
+      isAvailableLocally INTEGER DEFAULT 1,
+      isDeleted INTEGER DEFAULT 0,
+      updatedAt TEXT DEFAULT CURRENT_TIMESTAMP
     )
   ''');
 
@@ -140,7 +149,7 @@ class DatabaseHelper {
       firebaseId TEXT,
       appName TEXT,
       appPath TEXT,
-      remoteAppId TEXT,
+      remoteAppId INTEGER,
       FOREIGN KEY (appId) REFERENCES restricted_apps (id) ON DELETE CASCADE
     )
   ''');
@@ -463,6 +472,64 @@ class DatabaseHelper {
     }
     if (oldVersion < 7) {
       await _upgradeDBToV7(db);
+    }
+    if (oldVersion < 8) {
+      await _upgradeDBToV8(db);
+    }
+  }
+
+  Future<void> _upgradeDBToV8(Database db) async {
+    print('データベースをバージョン7から8にアップグレードします（論理削除フィールド拡張）');
+
+    try {
+      // セッションテーブルに論理削除と更新日時フィールドを追加
+      await db.execute('''
+      ALTER TABLE pomodoro_sessions ADD COLUMN isDeleted INTEGER DEFAULT 0;
+      ALTER TABLE pomodoro_sessions ADD COLUMN updatedAt TEXT DEFAULT CURRENT_TIMESTAMP;
+    ''');
+
+      // 制限アプリテーブルにデバイス情報と論理削除フィールドを追加
+      await db.execute('''
+      ALTER TABLE restricted_apps ADD COLUMN deviceId TEXT;
+      ALTER TABLE restricted_apps ADD COLUMN platformType TEXT;
+      ALTER TABLE restricted_apps ADD COLUMN isAvailableLocally INTEGER DEFAULT 1;
+      ALTER TABLE restricted_apps ADD COLUMN isDeleted INTEGER DEFAULT 0;
+      ALTER TABLE restricted_apps ADD COLUMN updatedAt TEXT DEFAULT CURRENT_TIMESTAMP;
+    ''');
+
+      // アプリ使用セッションテーブルに論理削除フィールドを追加
+      await db.execute('''
+      ALTER TABLE app_usage_sessions ADD COLUMN isDeleted INTEGER DEFAULT 0;
+    ''');
+
+      // 既存のレコードの updatedAt フィールドを現在時刻で更新
+      await db.execute('''
+      UPDATE restricted_apps 
+      SET updatedAt = CURRENT_TIMESTAMP 
+      WHERE updatedAt IS NULL
+    ''');
+
+      print('論理削除フィールド拡張が完了しました');
+    } catch (e) {
+      print('論理削除フィールド拡張エラー: $e');
+    }
+
+    // 現在のデバイスIDを設定
+    try {
+      final deviceId = await _getDeviceId();
+      final platformType = Platform.isWindows ? "windows" : "android";
+
+      await db.update(
+          'restricted_apps',
+          {
+            'deviceId': deviceId,
+            'platformType': platformType,
+          },
+          where: 'deviceId IS NULL');
+
+      print('既存アプリにデバイスIDを設定しました: $deviceId');
+    } catch (e) {
+      print('デバイスID設定エラー: $e');
     }
   }
 
@@ -974,6 +1041,13 @@ class DatabaseHelper {
     return results.map((map) => Task.fromMap(map)).toList();
   }
 
+  // 論理削除されているタスクも含めて取得
+  Future<List<Task>> getAllTasksIncludingDeleted() async {
+    final db = await database;
+    final results = await db.query('tasks', orderBy: 'updatedAt DESC');
+    return results.map((map) => Task.fromMap(map)).toList();
+  }
+
   Future<Task?> getTask(int id) async {
     final db = await database;
     final results = await db.query('tasks', where: 'id = ?', whereArgs: [id]);
@@ -1009,6 +1083,17 @@ class DatabaseHelper {
     final db = await database;
     final results = await db.query(
       'pomodoro_sessions',
+      where: 'isDeleted = 0',
+      orderBy: 'startTime DESC',
+    );
+    return results.map((map) => PomodoroSession.fromMap(map)).toList();
+  }
+
+  // すべてのポモドーロセッションを取得（同期用）
+  Future<List<PomodoroSession>> getAllPomodoroSessionsIncludingDeleted() async {
+    final db = await database;
+    final results = await db.query(
+      'pomodoro_sessions',
       orderBy: 'startTime DESC',
     );
     return results.map((map) => PomodoroSession.fromMap(map)).toList();
@@ -1018,7 +1103,7 @@ class DatabaseHelper {
     final db = await database;
     final results = await db.query(
       'pomodoro_sessions',
-      where: 'taskId = ?',
+      where: 'taskId = ? AND isDeleted = 0',
       whereArgs: [taskId],
       orderBy: 'startTime DESC',
     );
@@ -1217,11 +1302,15 @@ class DatabaseHelper {
 
   Future<List<AppUsageSession>> getAppUsageSessions() async {
     final db = await database;
-    final results = await db.query(
+    final List<Map<String, dynamic>> results = await db.query(
       'app_usage_sessions',
       orderBy: 'startTime DESC',
     );
-    return results.map((map) => AppUsageSession.fromMap(map)).toList();
+
+    //return results.map((map) => AppUsageSession.fromMap(map)).toList();
+    return List.generate(results.length, (i) {
+      return AppUsageSession.fromMap(results[i]);
+    });
   }
 
   // 制限アプリの追加にトランザクションを使用
@@ -1254,11 +1343,47 @@ class DatabaseHelper {
   }
   // DatabaseHelper クラスに追加するメソッド
 
-// すべての制限アプリを取得
+  // 論理削除されていないの制限アプリを取得
   Future<List<RestrictedApp>> getRestrictedApps() async {
     final db = await database;
     final results = await db.query('restricted_apps');
-    return results.map((map) => RestrictedApp.fromMap(map)).toList();
+    // パスごとにグループ化して最新のみを保持
+    final Map<String, RestrictedApp> uniqueApps = {};
+
+    for (var map in results) {
+      final app = RestrictedApp.fromMap(map);
+      final key = app.executablePath;
+
+      // 既に同じパスのアプリが存在するか確認
+      if (!uniqueApps.containsKey(key) || app.id! > uniqueApps[key]!.id!) {
+        uniqueApps[key] = app;
+      }
+    }
+
+    // 論理削除されていないアプリのみ返す
+    return uniqueApps.values.where((app) => !app.isDeleted).toList();
+  }
+
+  Future<List<RestrictedApp>> getRestrictedAppsAvailableLocally() async {
+    final db = await database;
+    final results = await db.query('restricted_apps');
+    // パスごとにグループ化して最新のみを保持
+    final Map<String, RestrictedApp> uniqueApps = {};
+
+    for (var map in results) {
+      final app = RestrictedApp.fromMap(map);
+      final key = app.executablePath;
+
+      // 既に同じパスのアプリが存在するか確認
+      if (!uniqueApps.containsKey(key) || app.id! > uniqueApps[key]!.id!) {
+        uniqueApps[key] = app;
+      }
+    }
+
+    // 論理削除されていないアプリのみ返す
+    return uniqueApps.values
+        .where((app) => !app.isDeleted && app.isAvailableLocally)
+        .toList();
   }
 
 // 名前で制限アプリを検索
@@ -1270,6 +1395,27 @@ class DatabaseHelper {
       whereArgs: [name],
     );
     return results.map((map) => RestrictedApp.fromMap(map)).toList();
+  }
+
+  // 削除されたものも含めて全ての制限アプリを取得（同期用）
+  Future<List<RestrictedApp>> getAllRestrictedAppsIncludingDeleted() async {
+    final db = await database;
+    final results = await db.query('restricted_apps');
+
+    // パスごとにグループ化して最新のみを保持
+    final Map<String, RestrictedApp> uniqueApps = {};
+
+    for (var map in results) {
+      final app = RestrictedApp.fromMap(map);
+      final key = app.executablePath;
+
+      // 既に同じパスのアプリが存在するか確認
+      if (!uniqueApps.containsKey(key) || app.id! > uniqueApps[key]!.id!) {
+        uniqueApps[key] = app;
+      }
+    }
+
+    return uniqueApps.values.toList();
   }
 
 // 名前とパスで制限アプリを検索
@@ -1580,6 +1726,150 @@ class DatabaseHelper {
     task.updatedAt = DateTime.now();
 
     return await updateTask(task);
+  }
+
+  // 制限アプリの論理削除
+  Future<int> softDeleteRestrictedApp(int id) async {
+    final db = await database;
+    final app = await getRestrictedApp(id);
+
+    if (app == null) {
+      return 0;
+    }
+
+    final updatedApp = app.copyWith(
+      isDeleted: true,
+    );
+
+    return await updateRestrictedApp(updatedApp);
+  }
+
+// ポモドーロセッションの論理削除
+  Future<int> softDeletePomodoroSession(int id) async {
+    final db = await database;
+
+    try {
+      // 対象のセッションを取得
+      final results = await db.query(
+        'pomodoro_sessions',
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+
+      if (results.isEmpty) {
+        return 0;
+      }
+
+      final session = PomodoroSession.fromMap(results.first);
+
+      // 論理削除状態に更新
+      final updatedSession = session.copyWith(
+        isDeleted: true,
+        updatedAt: DateTime.now(),
+      );
+
+      // 更新を実行
+      return await db.update(
+        'pomodoro_sessions',
+        updatedSession.toMap(),
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    } catch (e) {
+      print('ポモドーロセッション論理削除エラー: $e');
+      return 0;
+    }
+  }
+
+  Future<String> _getDeviceId() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      String? deviceId = prefs.getString('device_id');
+
+      if (deviceId == null) {
+        // デバイスIDがない場合は新規作成
+        final uuid = Uuid();
+        deviceId = uuid.v4();
+        await prefs.setString('device_id', deviceId);
+      }
+
+      return deviceId;
+    } catch (e) {
+      print('デバイスID取得エラー: $e');
+      // エラー時は一時的なIDを返す
+      return 'temp_${DateTime.now().millisecondsSinceEpoch}';
+    }
+  }
+
+  // 表示用の制限アプリリストを取得（未知のアプリをフィルタリング）
+  Future<List<RestrictedApp>> getDisplayableRestrictedApps() async {
+    final allApps = await getRestrictedApps();
+
+    // 現在のデバイスに存在するアプリ、または現在のデバイスで作成されたアプリのみ表示
+    final String deviceId = await _getDeviceId();
+
+    return allApps
+        .where((app) => app.isAvailableLocally == true
+            //|| app.deviceId == deviceId
+            )
+        .toList();
+  }
+
+// セッション履歴表示用のクエリ（削除されたタスクの情報も含む）
+  Future<List<Map<String, dynamic>>> getSessionHistoryWithTaskInfo() async {
+    final db = await database;
+
+    return await db.rawQuery('''
+    SELECT 
+      ps.id,
+      ps.taskId,
+      ps.startTime,
+      ps.endTime,
+      ps.durationMinutes,
+      ps.completed,
+      ps.focusScore,
+      ps.timeOfDay,
+      ps.interruptionCount,
+      ps.mood,
+      ps.isBreak,
+      ps.isDeleted,
+      t.name as taskName,
+      t.category as taskCategory,
+      t.isDeleted as taskIsDeleted
+    FROM pomodoro_sessions ps
+    LEFT JOIN tasks t ON ps.taskId = t.id
+    WHERE ps.isDeleted = 0
+    ORDER BY ps.startTime DESC
+  ''');
+  }
+
+// 重複した制限アプリを整理するメソッド
+  Future<void> removeDuplicateRestrictedApps() async {
+    final db = await database;
+
+    // 1. 重複を特定（同じ実行パスを持つアプリ）
+    final duplicates = await db.rawQuery('''
+    SELECT executable_path
+    FROM restricted_apps
+    WHERE is_deleted = 0
+    GROUP BY executable_path
+    HAVING COUNT(*) > 1
+  ''');
+
+    // 2. 各重複セットで、最新のものを残して他を論理削除
+    for (var dup in duplicates) {
+      final path = dup['executable_path'];
+      final apps = await db.query('restricted_apps',
+          where: 'executable_path = ? AND is_deleted = 0',
+          whereArgs: [path],
+          orderBy: 'id DESC');
+
+      // 最新の1件を除いて他を論理削除
+      for (int i = 1; i < apps.length; i++) {
+        await db.update('restricted_apps', {'is_deleted': 1},
+            where: 'id = ?', whereArgs: [apps[i]['id']]);
+      }
+    }
   }
 
 // テスト用データを生成して追加する
