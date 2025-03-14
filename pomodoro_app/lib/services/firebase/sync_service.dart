@@ -11,6 +11,11 @@ import 'dart:math';
 import 'auth_service.dart';
 import '../../utils/platform_utils.dart';
 import 'firebase_rest_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
+import '../../platforms/android/android_app_controller.dart';
+import '../../platforms/windows/windows_app_controller.dart';
+import 'dart:io';
 
 class SyncService {
   final DatabaseReference _database = FirebaseDatabase.instance.ref();
@@ -46,7 +51,7 @@ class SyncService {
 
       // ローカルタスクの取得
       //final localTasks = await _dbHelper.getTasksChangedSince(lastSyncTime);
-      final localTasks = await _dbHelper.getTasks();
+      final localTasks = await _dbHelper.getAllTasksIncludingDeleted();
 
       // ローカルのタスク名をマップ化して高速検索できるようにする
       final localTaskNameMap = <String, Task>{};
@@ -129,11 +134,10 @@ class SyncService {
       for (var entry in remoteTasks.entries) {
         final key = entry.key;
         final taskData = entry.value;
-        print("リモートキー $key");
         // FirebaseIDでの存在チェック
         final existsByFirebaseId =
             localTasks.any((task) => task.firebaseId == key);
-        print("FirebaseIDでの存在チェック $existsByFirebaseId");
+
         if (!existsByFirebaseId) {
           final remoteTaskName = taskData['name'] as String;
 
@@ -181,7 +185,8 @@ class SyncService {
           await _settingsService.getLastSyncTime('pomodoro_sessions');
 
       // 1. ローカルセッションをすべて取得 (変更されたものだけではなく)
-      final allLocalSessions = await _dbHelper.getPomodoroSessions();
+      final allLocalSessions =
+          await _dbHelper.getAllPomodoroSessionsIncludingDeleted();
 
       // 2. 前回の同期以降に変更されたセッションのみを取得（アップロード用）
       final changedLocalSessions =
@@ -369,12 +374,21 @@ class SyncService {
         return app.id;
       }
     }
+    if (name.startsWith("未知のアプリ: ")) {
+      String cleanName = name.substring("未知のアプリ: ".length);
+      for (var app in apps) {
+        if (app.name == cleanName && app.id != null) {
+          return app.id;
+        }
+      }
+    }
 
     return null;
   }
 
 // 「未知のアプリ」カテゴリを取得または作成
-  Future<int> _getOrCreateUnknownApp(String name, String? path) async {
+  Future<int> _getOrCreateUnknownApp(String name, String? path,
+      {String? platformType, String? DeviceId}) async {
     // まず「未知のアプリ」という名前のアプリを検索
     final apps = await _dbHelper.getRestrictedAppByName('未知のアプリ: $name');
 
@@ -390,19 +404,32 @@ class SyncService {
       isRestricted: false, // 制限なし（別デバイス用）
       requiredPomodorosToUnlock: 0,
       minutesPerPoint: 30,
+      isAvailableLocally: false,
+      deviceId: DeviceId,
+      platformType: platformType,
     );
 
     final id = await _dbHelper.insertRestrictedApp(unknownApp);
     return id;
   }
 
-  // 制限アプリの同期
+  // SyncService の syncRestrictedApps メソッドの改良版
+
   Future<void> syncRestrictedApps(String userId) async {
     try {
       print("制限アプリ同期開始 (${_useRestApi ? 'REST API' : 'SDK'})");
 
-      // ローカルの制限アプリを取得
-      final localApps = await _dbHelper.getRestrictedApps();
+      // デバイス識別子とプラットフォームタイプを取得
+      final String deviceId = await _getDeviceId();
+      final String platformType =
+          _platformUtils.isWindows ? "windows" : "android";
+
+      // ローカルの制限アプリを取得（論理削除されたものも含む）
+      final localApps = await _dbHelper.getAllRestrictedAppsIncludingDeleted();
+
+      // 現在のデバイスにインストールされているアプリのリストを取得
+      final installedApps = await _getInstalledApps();
+
       Map<String, dynamic> remoteApps = {};
       if (_useRestApi) {
         final remoteData = await _restService.getRestrictedApps(userId);
@@ -428,68 +455,186 @@ class SyncService {
         }
       }
 
-      // リモートに存在しないローカルアプリをアップロード
-      for (var app in localApps) {
-        if (app.firebaseId == null || !remoteApps.containsKey(app.firebaseId)) {
-          String? newFirebaseId;
-          if (_useRestApi) {
-            newFirebaseId = await _restService.syncRestrictedApp(userId, app);
-          } else {
-            final appsRef = _database.child('users/$userId/restricted_apps');
-            final newRef = appsRef.push();
-            newFirebaseId = newRef.key;
-            await newRef.set(app.toFirebase());
-          }
-          if (newFirebaseId != null) {
-            // ローカルアプリにFirebase IDを設定して保存
-            final updatedApp = app.copyWith(firebaseId: newFirebaseId);
-            await _dbHelper.updateRestrictedApp(updatedApp);
-
-            print('新しい制限アプリをアップロード: ${app.name}');
-          }
-        } else {
-          if (_useRestApi) {
-            await _restService.updateData(
-                'users/$userId/restricted_apps/${app.firebaseId}',
-                app.toFirebase());
-          } else {
-            // 既存のアプリは設定のみアップデート（セッション終了時間などの一時的な状態は除く）
-            await _database
-                .child('users/$userId/restricted_apps/${app.firebaseId}')
-                .update(app.toFirebase());
-          }
-          print('既存の制限アプリを更新: ${app.name}');
+      //ローカルのアプリの名前に「未知のアプリ」とあったら、未知のアプリの部分を消す
+      for (var i = 0; i < localApps.length; i++) {
+        var app = localApps[i];
+        if (app.name.startsWith("未知のアプリ: ")) {
+          String cleanName = app.name.substring("未知のアプリ: ".length);
+          localApps[i] = app.copyWith(name: cleanName);
+          print("アプリ名を修正: ${app.name} -> $cleanName");
         }
       }
 
-      // ローカルに存在しないリモートアプリをダウンロード
+      // リモートの制限アプリを処理
+      List<RestrictedApp> uniqueRemoteApps = [];
+      Map<String, RestrictedApp> pathToAppMap = {};
+
+      // リモートアプリのリストから同じパスを持つアプリの重複を除去
       for (var entry in remoteApps.entries) {
         final key = entry.key;
         final appData = entry.value;
 
-        // すでにインポート済みかどうか確認
-        final exists = localApps.any((app) => app.firebaseId == key);
+        final app = RestrictedApp.fromFirebase(appData, key);
 
-        if (!exists) {
-          // アプリ名とパスでローカルに同じアプリがないか確認
-          final appName = appData['name'];
-          final appPath = appData['executablePath'];
+        // アプリがローカルに存在するかチェック
+        bool isAvailableLocally = _isAppAvailableLocally(app, installedApps);
+        app.isAvailableLocally = isAvailableLocally;
 
-          final existingApp =
-              await _dbHelper.getRestrictedAppByNameAndPath(appName, appPath);
+        // 実行パスをキーにして最新のアプリデータだけを保持
+        final path = app.executablePath;
+        final updatedAt =
+            DateTime.parse(appData['updatedAt'] ?? '2000-01-01T00:00:00Z');
 
-          if (existingApp == null) {
-            // 新しいアプリとしてインポート
-            final app = RestrictedApp.fromFirebase(appData);
-            final updatedApp = app.copyWith(firebaseId: key);
-            //await _dbHelper.insertRestrictedApp(updatedApp);
-            print('新しいリモート制限アプリを追加: ${app.name}');
-          } else if (existingApp.firebaseId == null) {
-            // 既存のアプリにFirebase IDを関連付け
-            final updatedApp = existingApp.copyWith(firebaseId: key);
+        if (!pathToAppMap.containsKey(path) ||
+            !pathToAppMap[path]!.updatedAt.isAfter(updatedAt)) {
+          pathToAppMap[path] = app;
+        }
+      }
+
+      // 重複のないリストを作成
+      uniqueRemoteApps = pathToAppMap.values.toList();
+
+      // ローカルアプリのマッピングを作成（パス → アプリ）
+      final localAppByPath = <String, RestrictedApp>{};
+      for (var app in localApps) {
+        localAppByPath[app.executablePath] = app;
+      }
+
+      // ローカルのFirebaseID → アプリマッピングも作成
+      final localAppByFirebaseId = <String, RestrictedApp>{};
+      for (var app in localApps) {
+        if (app.firebaseId != null) {
+          localAppByFirebaseId[app.firebaseId!] = app;
+        }
+      }
+
+      // リモートアプリをローカルDBに追加/更新
+      for (var remoteApp in uniqueRemoteApps) {
+        final path = remoteApp.executablePath;
+
+        // 実行パスが同じアプリがローカルに存在するか確認
+        if (localAppByPath.containsKey(path)) {
+          final localApp = localAppByPath[path]!;
+
+          // パスは同じだがFirebaseIDが異なる場合、同じアプリとみなして統合
+          if (localApp.firebaseId != remoteApp.firebaseId) {
+            print(
+                '同じパスで異なるIDのアプリを統合: ${remoteApp.name}, パス=${remoteApp.executablePath}');
+
+            // 更新用のアプリ情報を作成（ローカルIDを維持しつつ、リモートの最新情報とリモートのFirebaseIDを使用）
+            final updatedApp = localApp.copyWith(
+              name: remoteApp.name,
+              allowedMinutesPerDay: remoteApp.allowedMinutesPerDay,
+              isRestricted: remoteApp.isRestricted,
+              requiredPomodorosToUnlock: remoteApp.requiredPomodorosToUnlock,
+              minutesPerPoint: remoteApp.minutesPerPoint,
+              deviceId: remoteApp.deviceId,
+              platformType: remoteApp.platformType,
+              isAvailableLocally: remoteApp.isAvailableLocally,
+              isDeleted: remoteApp.isDeleted,
+              firebaseId: remoteApp.firebaseId,
+            );
+
             await _dbHelper.updateRestrictedApp(updatedApp);
-            print('既存の制限アプリにFirebase IDを関連付け: ${existingApp.name}');
+          } else if (remoteApp.firebaseId == localApp.firebaseId) {
+            // 同じFirebaseIDの場合は通常の更新処理
+            final remoteTimestamp = DateTime.parse(
+                remoteApps[remoteApp.firebaseId!]['updatedAt'] ??
+                    '2000-01-01T00:00:00Z');
+
+            // リモートの方が新しい場合はローカルを更新
+            if (remoteTimestamp.isAfter(localApp.updatedAt)) {
+              final updatedApp = localApp.copyWith(
+                name: remoteApp.name,
+                allowedMinutesPerDay: remoteApp.allowedMinutesPerDay,
+                isRestricted: remoteApp.isRestricted,
+                requiredPomodorosToUnlock: remoteApp.requiredPomodorosToUnlock,
+                minutesPerPoint: remoteApp.minutesPerPoint,
+                deviceId: remoteApp.deviceId,
+                platformType: remoteApp.platformType,
+                isAvailableLocally: remoteApp.isAvailableLocally,
+                isDeleted: remoteApp.isDeleted,
+              );
+
+              await _dbHelper.updateRestrictedApp(updatedApp);
+              print('リモートの最新情報でアプリを更新: ${remoteApp.name}');
+            }
           }
+        } else if (remoteApp.firebaseId != null &&
+            localAppByFirebaseId.containsKey(remoteApp.firebaseId)) {
+          // パスは異なるがFirebaseIDが一致する場合（稀なケース）
+          final localApp = localAppByFirebaseId[remoteApp.firebaseId!]!;
+
+          // リモートの更新日時を取得
+          final remoteTimestamp = DateTime.parse(
+              remoteApps[remoteApp.firebaseId!]['updatedAt'] ??
+                  '2000-01-01T00:00:00Z');
+
+          // リモートの方が新しい場合はローカルを更新
+          if (remoteTimestamp.isAfter(localApp.updatedAt)) {
+            final updatedApp = localApp.copyWith(
+              name: remoteApp.name,
+              executablePath: remoteApp.executablePath, // パスも更新
+              allowedMinutesPerDay: remoteApp.allowedMinutesPerDay,
+              isRestricted: remoteApp.isRestricted,
+              requiredPomodorosToUnlock: remoteApp.requiredPomodorosToUnlock,
+              minutesPerPoint: remoteApp.minutesPerPoint,
+              deviceId: remoteApp.deviceId,
+              platformType: remoteApp.platformType,
+              isAvailableLocally: remoteApp.isAvailableLocally,
+              isDeleted: remoteApp.isDeleted,
+            );
+
+            await _dbHelper.updateRestrictedApp(updatedApp);
+            print('異なるパスでFirebaseIDが一致するアプリを更新: ${remoteApp.name}');
+          }
+        } else {
+          // 完全に新しいアプリの場合
+          // 自分のデバイスのアプリか、ローカルに存在するアプリのみを追加
+          if (remoteApp.deviceId == deviceId || remoteApp.isAvailableLocally) {
+            final newApp = remoteApp.copyWith(
+              deviceId: remoteApp.deviceId ?? deviceId,
+              platformType: remoteApp.platformType ?? platformType,
+            );
+
+            await _dbHelper.insertRestrictedApp(newApp);
+            print('新しいリモートアプリを追加: ${remoteApp.name}');
+          } else {
+            print('他デバイスの利用できないアプリはスキップ: ${remoteApp.name}');
+          }
+        }
+      }
+
+      // ローカルアプリをFirebaseにアップロード（FirebaseIDがないものだけ）
+      for (var localApp in localApps) {
+        print(localApp.firebaseId);
+        if (localApp.firebaseId == null) {
+          // このデバイスで作成されたアプリにデバイス情報を設定
+          final updatedApp = localApp.copyWith(
+            deviceId: deviceId,
+            platformType: platformType,
+          );
+
+          String? newFirebaseId;
+          if (_useRestApi) {
+            newFirebaseId =
+                await _restService.syncRestrictedApp(userId, updatedApp);
+          } else {
+            final appsRef = _database.child('users/$userId/restricted_apps');
+            final newRef = appsRef.push();
+            newFirebaseId = newRef.key;
+            await newRef.set(updatedApp.toFirebase());
+          }
+
+          if (newFirebaseId != null) {
+            updatedApp.firebaseId = newFirebaseId;
+            await _dbHelper.updateRestrictedApp(updatedApp);
+            print('新しい制限アプリをアップロード: ${updatedApp.name}');
+          }
+        } else {
+          // 既存のアプリでFirebaseIDがある場合、更新が必要か確認
+          // 削除フラグの同期なども行う
+          await _updateExistingRestrictedApp(userId, localApp, remoteApps);
         }
       }
 
@@ -498,6 +643,120 @@ class SyncService {
     } catch (e) {
       print('制限アプリ同期エラー: $e');
       rethrow;
+    }
+  }
+
+// 既存の制限アプリを更新するヘルパーメソッド
+  Future<void> _updateExistingRestrictedApp(String userId,
+      RestrictedApp localApp, Map<String, dynamic> remoteApps) async {
+    try {
+      if (localApp.firebaseId == null ||
+          !remoteApps.containsKey(localApp.firebaseId)) {
+        return; // FirebaseIDがないか、リモートに存在しない場合はスキップ
+      }
+
+      final remoteData = remoteApps[localApp.firebaseId!];
+      final remoteTimestamp =
+          DateTime.parse(remoteData['updatedAt'] ?? '2000-01-01T00:00:00Z');
+
+      // 論理削除の同期（ローカルで削除された場合の処理）
+      if (localApp.isDeleted &&
+          !remoteData['isDeleted'] &&
+          localApp.updatedAt.isAfter(remoteTimestamp)) {
+        // ローカルで削除され、リモートではまだ削除されていない場合、リモートに削除を反映
+        if (_useRestApi) {
+          await _restService.updateData(
+              'users/$userId/restricted_apps/${localApp.firebaseId}', {
+            'isDeleted': true,
+            'updatedAt': DateTime.now().toIso8601String()
+          });
+        } else {
+          await _database
+              .child('users/$userId/restricted_apps/${localApp.firebaseId}')
+              .update({
+            'isDeleted': true,
+            'updatedAt': DateTime.now().toIso8601String()
+          });
+        }
+        print('ローカルの削除状態をリモートに反映: ${localApp.name}');
+      } else if (!localApp.isDeleted &&
+          remoteData['isDeleted'] &&
+          remoteTimestamp.isAfter(localApp.updatedAt)) {
+        // リモートで削除され、ローカルではまだ削除されていない場合、ローカルに削除を反映
+        final updatedApp = localApp.copyWith(isDeleted: true);
+        await _dbHelper.updateRestrictedApp(updatedApp);
+        print('リモートの削除状態をローカルに反映: ${localApp.name}');
+      } else if (!localApp.isDeleted &&
+          !remoteData['isDeleted'] &&
+          localApp.updatedAt.isAfter(remoteTimestamp)) {
+        // 通常の更新（ローカルの方が新しい場合）
+        if (_useRestApi) {
+          await _restService.updateData(
+              'users/$userId/restricted_apps/${localApp.firebaseId}',
+              localApp.toFirebase());
+        } else {
+          await _database
+              .child('users/$userId/restricted_apps/${localApp.firebaseId}')
+              .update(localApp.toFirebase());
+        }
+        print('ローカルの最新情報をリモートに反映: ${localApp.name}');
+      }
+    } catch (e) {
+      print('制限アプリ更新エラー: $e');
+    }
+  }
+
+// 現在のデバイスIDを取得
+  Future<String> _getDeviceId() async {
+    final prefs = await SharedPreferences.getInstance();
+    String? deviceId = prefs.getString('device_id');
+
+    if (deviceId == null) {
+      // デバイスIDがない場合は新規作成
+      final uuid = Uuid();
+      deviceId = uuid.v4();
+      await prefs.setString('device_id', deviceId);
+    }
+
+    return deviceId;
+  }
+
+// 現在のデバイスにアプリが存在するか確認するヘルパーメソッド
+  bool _isAppAvailableLocally(RestrictedApp app, List<String> installedApps) {
+    if (_platformUtils.isWindows) {
+      // Windowsの場合、実行ファイルパスが存在するか確認
+      return File(app.executablePath).existsSync();
+    } else {
+      // Androidの場合、アプリ名がインストール済みアプリに含まれるか確認
+      bool isInstalled = installedApps.contains(app.name) ||
+          installedApps.contains(app.executablePath);
+      if (!isInstalled && app.name.startsWith("未知のアプリ: ")) {
+        String cleanName = app.name.substring("未知のアプリ: ".length);
+        isInstalled = installedApps.contains(cleanName);
+      }
+      return isInstalled;
+    }
+  }
+
+// インストール済みアプリのリストを取得
+  Future<List<String>> _getInstalledApps() async {
+    if (_platformUtils.isWindows) {
+      // WindowsではWindowsAppControllerからインストール済みアプリを取得
+      try {
+        //空のリストを返す
+        return await WindowsAppController().getInstalledAppPaths();
+      } catch (e) {
+        print('インストール済みアプリ取得エラー: $e');
+        return [];
+      }
+    } else {
+      // AndroidではAndroidAppControllerからインストール済みアプリを取得
+      try {
+        return await AndroidAppController().getInstalledAppNames();
+      } catch (e) {
+        print('インストール済みアプリ取得エラー: $e');
+        return [];
+      }
     }
   }
 
@@ -635,9 +894,9 @@ class SyncService {
           await _settingsService.getLastSyncTime('app_usage_sessions');
 
       // ローカルセッション取得
-      final localSessions =
-          await _dbHelper.getAppUsageSessionsChangedSince(lastSyncTime);
-
+      final List<AppUsageSession> localSessions =
+          await _dbHelper.getAppUsageSessions();
+      //final localSessions = await _dbHelper.getAppUsageSessions();
       // ローカルのアプリ情報を取得
       final appInfoMap = await _getLocalRestrictedAppsInfo();
 
@@ -699,7 +958,6 @@ class SyncService {
           }
         }
       }
-
       // リモートセッションのダウンロード
       for (var entry in remoteSessions.entries) {
         final key = entry.key;
@@ -708,12 +966,13 @@ class SyncService {
         // 既に同じFirebase IDを持つセッションがあるかチェック
         final exists =
             localSessions.any((session) => session.firebaseId == key);
-
         if (!exists) {
           // セッションデータから必要な情報を抽出
           final appName = sessionData['appName'];
           final appPath = sessionData['appPath'];
           final remoteAppId = sessionData['remoteAppId'];
+          final deviceId = sessionData['deviceId'];
+          final platformType = sessionData['platformType'];
 
           // アプリ名・パスから対応するローカルの制限アプリを検索
           int? localAppId =
@@ -734,7 +993,8 @@ class SyncService {
           } else if (appName != null) {
             // 対応するアプリがない場合は「未知のアプリ」として記録
             // まず「未知のアプリ」カテゴリを作成または検索
-            int unknownAppId = await _getOrCreateUnknownApp(appName, appPath);
+            int unknownAppId = await _getOrCreateUnknownApp(appName, appPath,
+                platformType: platformType, DeviceId: deviceId);
 
             final session = AppUsageSession.fromFirebase(sessionData);
             session.firebaseId = key;

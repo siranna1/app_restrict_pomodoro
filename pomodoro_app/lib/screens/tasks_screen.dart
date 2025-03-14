@@ -25,7 +25,7 @@ class _TasksScreenState extends State<TasksScreen> {
   @override
   Widget build(BuildContext context) {
     final taskProvider = Provider.of<TaskProvider>(context);
-
+    taskProvider.loadTasks();
 // 利用可能なカテゴリリストを作成
     final categories = [
       'すべて',

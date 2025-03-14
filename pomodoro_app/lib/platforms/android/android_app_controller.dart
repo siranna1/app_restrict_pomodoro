@@ -158,6 +158,16 @@ class AndroidAppController {
     }
   }
 
+  Future<List<String>> getInstalledAppNames() async {
+    try {
+      final installedApps = await getInstalledApps();
+      return installedApps.map((app) => app['packageName'] as String).toList();
+    } catch (e) {
+      print('インストール済みアプリ名取得エラー: $e');
+      return [];
+    }
+  }
+
   /// オーバーレイ権限があるか確認
   Future<bool> hasOverlayPermission() async {
     try {

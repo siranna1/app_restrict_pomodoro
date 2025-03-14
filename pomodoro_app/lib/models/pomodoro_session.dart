@@ -14,6 +14,8 @@ class PomodoroSession {
   final bool isBreak; // 休憩セッションかどうか
   String? firebaseId;
   String? firebaseTaskId;
+  final bool isDeleted; // 論理削除フラグ
+  final DateTime updatedAt; // 更新日時
 
   PomodoroSession({
     this.id,
@@ -29,7 +31,9 @@ class PomodoroSession {
     this.isBreak = false,
     this.firebaseId,
     this.firebaseTaskId,
-  });
+    this.isDeleted = false,
+    DateTime? updatedAt,
+  }) : this.updatedAt = updatedAt ?? DateTime.now();
 
   // 時間帯を自動的に設定するファクトリコンストラクタ
   factory PomodoroSession.withTimeOfDay({
@@ -43,6 +47,8 @@ class PomodoroSession {
     int interruptionCount = 0,
     String? mood,
     bool isBreak = false,
+    bool isDeleted = false,
+    DateTime? updatedAt,
   }) {
     // 開始時間に基づいて時間帯を自動判定
     final hour = startTime.hour;
@@ -74,6 +80,8 @@ class PomodoroSession {
       interruptionCount: interruptionCount,
       mood: mood,
       isBreak: isBreak,
+      isDeleted: isDeleted,
+      updatedAt: updatedAt,
     );
   }
 
@@ -91,6 +99,8 @@ class PomodoroSession {
       'mood': mood,
       'isBreak': isBreak ? 1 : 0,
       'firebaseId': firebaseId,
+      'isDeleted': isDeleted ? 1 : 0,
+      'updatedAt': updatedAt.toIso8601String(),
     };
   }
 
@@ -108,6 +118,10 @@ class PomodoroSession {
       mood: map['mood'],
       isBreak: map['isBreak'] == 1,
       firebaseId: map['firebaseId'],
+      isDeleted: map['isDeleted'] == 1,
+      updatedAt: map['updatedAt'] != null
+          ? DateTime.parse(map['updatedAt'])
+          : DateTime.now(),
     );
   }
   // コピーメソッド
@@ -124,6 +138,8 @@ class PomodoroSession {
     String? mood,
     bool? isBreak,
     String? firebaseId,
+    bool? isDeleted,
+    DateTime? updatedAt,
   }) {
     return PomodoroSession(
       id: id ?? this.id,
@@ -138,6 +154,8 @@ class PomodoroSession {
       mood: mood ?? this.mood,
       isBreak: isBreak ?? this.isBreak,
       firebaseId: firebaseId ?? this.firebaseId,
+      isDeleted: isDeleted ?? this.isDeleted,
+      updatedAt: updatedAt ?? DateTime.now(),
     );
   }
 
@@ -153,6 +171,8 @@ class PomodoroSession {
       'interruptionCount': interruptionCount,
       'mood': mood,
       'isBreak': isBreak,
+      'isDeleted': isDeleted,
+      'updatedAt': updatedAt.toIso8601String(),
     };
   }
 
@@ -169,6 +189,10 @@ class PomodoroSession {
       mood: data['mood'],
       isBreak: data['isBreak'],
       firebaseTaskId: data['firebaseTaskId'],
+      isDeleted: data['isDeleted'] ?? false,
+      updatedAt: data['updatedAt'] != null
+          ? DateTime.parse(data['updatedAt'])
+          : DateTime.now(),
     );
   }
 }

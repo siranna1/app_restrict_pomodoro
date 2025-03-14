@@ -293,13 +293,6 @@ class WindowsAppController {
 
   // 制限対象アプリを削除
   Future<void> removeRestrictedApp(int id) async {
-    final db = await DatabaseHelper.instance.database;
-    await db.delete(
-      'restricted_apps',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
-
     _restrictedApps.removeWhere((app) => app.id == id);
   }
 
@@ -308,6 +301,11 @@ class WindowsAppController {
     print("WindowsAppController.manualUpdatePomodoroCount が呼ばれました");
     await _loadCompletedPomodorosToday();
     print("更新後のポモドーロカウント: $_completedPomodorosToday");
+  }
+
+  Future<List<String>> getInstalledAppPaths() {
+    //windowsだと使われないっぽいから、空を返す
+    return Future.value([]);
   }
 
   // 自動起動の設定

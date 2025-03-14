@@ -52,7 +52,8 @@ class TaskProvider with ChangeNotifier {
   }
 
   Future<void> deleteTask(int id) async {
-    await DatabaseHelper.instance.deleteTask(id);
+    //await DatabaseHelper.instance.deleteTask(id);
+    await DatabaseHelper.instance.softDeleteTask(id);
     _tasks.removeWhere((task) => task.id == id);
     notifyListeners();
   }
