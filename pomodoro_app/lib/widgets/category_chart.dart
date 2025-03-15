@@ -57,32 +57,32 @@ class CategoryChart extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 16),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: categoryData.asMap().entries.map((entry) {
-            final index = entry.key;
-            final item = entry.value;
-            final category = item['category'] as String? ?? 'その他';
-            final sessionCount = item['sessionCount'] as int? ?? 0;
-            final totalMinutes = item['totalMinutes'] as int? ?? 0;
-            final hours = totalMinutes ~/ 60;
-            final minutes = totalMinutes % 60;
+        // const SizedBox(height: 16),
+        // Wrap(
+        //   spacing: 8,
+        //   runSpacing: 8,
+        //   children: categoryData.asMap().entries.map((entry) {
+        //     final index = entry.key;
+        //     final item = entry.value;
+        //     final category = item['category'] as String? ?? 'その他';
+        //     final sessionCount = item['sessionCount'] as int? ?? 0;
+        //     final totalMinutes = item['totalMinutes'] as int? ?? 0;
+        //     final hours = totalMinutes ~/ 60;
+        //     final minutes = totalMinutes % 60;
 
-            return Chip(
-              avatar: CircleAvatar(
-                backgroundColor: _getCategoryColor(index),
-                radius: 8,
-              ),
-              label: Text(
-                '$category: $sessionCount回 ($hours時間$minutes分)',
-                style: const TextStyle(fontSize: 12),
-              ),
-              backgroundColor: Colors.grey[200],
-            );
-          }).toList(),
-        ),
+        //     return Chip(
+        //       avatar: CircleAvatar(
+        //         backgroundColor: _getCategoryColor(index),
+        //         radius: 8,
+        //       ),
+        //       label: Text(
+        //         '$category: $sessionCount回 ($hours時間$minutes分)',
+        //         style: const TextStyle(fontSize: 12),
+        //       ),
+        //       backgroundColor: Colors.grey[200],
+        //     );
+        //   }).toList(),
+        // ),
       ],
     );
   }

@@ -582,25 +582,38 @@ class DatabaseHelper {
       WHERE startTime BETWEEN ? AND ?
         AND completed = 1
         AND isBreak = 0
+        AND isDeleted = 0
       GROUP BY timeOfDay
       ORDER BY count DESC
     ''', [startDate.toIso8601String(), now.toIso8601String()]);
   }
 
   // 時間帯ごとのポモドーロ数をUI表示用に変換
-  Future<List<Map<String, dynamic>>> getTimeOfDayStatisticsForUI(
-      int days) async {
+  Future<List<Map<String, dynamic>>> getTimeOfDayStatisticsForUI(int days,
+      {bool isDetailed = true}) async {
     final stats = await getTimeOfDayStatistics(days);
 
     // 時間帯名を日本語表示用に変換
-    final Map<String, String> timeOfDayLabels = {
-      'morning': '早朝 (5-8時)',
-      'forenoon': '午前 (8-12時)',
-      'afternoon': '午後 (12-17時)',
-      'evening': '夕方 (17-20時)',
-      'night': '夜間 (20-24時)',
-      'midnight': '深夜 (0-5時)',
-    };
+    Map<String, String> timeOfDayLabels = {};
+    if (isDetailed) {
+      timeOfDayLabels = {
+        'morning': '早朝 (5-8時)',
+        'forenoon': '午前 (8-12時)',
+        'afternoon': '午後 (12-17時)',
+        'evening': '夕方 (17-20時)',
+        'night': '夜間 (20-24時)',
+        'midnight': '深夜 (0-5時)',
+      };
+    } else {
+      timeOfDayLabels = {
+        'morning': '早朝',
+        'forenoon': '午前',
+        'afternoon': '午後',
+        'evening': '夕方',
+        'night': '夜間',
+        'midnight': '深夜',
+      };
+    }
 
     // すべての時間帯を網羅するための結果を作成
     final result = <Map<String, dynamic>>[];
@@ -685,6 +698,7 @@ class DatabaseHelper {
       WHERE date(startTime) = date(?)
         AND isBreak = 0
         AND completed = 1
+        AND isDeleted = 0
     ''', [today.toIso8601String()]);
 
     final todayCount = todayResults.first['count'] as int? ?? 0;
@@ -695,6 +709,7 @@ class DatabaseHelper {
       FROM pomodoro_sessions
       WHERE isBreak = 0
         AND completed = 1
+        AND isDeleted = 0
     ''');
 
     final lastSessionDateStr =
@@ -723,6 +738,7 @@ class DatabaseHelper {
             WHERE date(startTime) = date(?)
               AND isBreak = 0
               AND completed = 1
+              AND isDeleted = 0
           ''', [dateStr]);
 
           final count = result.first['count'] as int? ?? 0;
@@ -742,6 +758,7 @@ class DatabaseHelper {
       FROM pomodoro_sessions
       WHERE isBreak = 0
         AND completed = 1
+        AND isDeleted = 0
       ORDER BY sessionDate ASC
     ''');
 
@@ -782,6 +799,7 @@ class DatabaseHelper {
       WHERE startTime >= date('now', '-30 days')
         AND isBreak = 0
         AND completed = 1
+        AND isDeleted = 0
     ''');
 
     final workDays = consistencyResults.first['workDays'] as int? ?? 0;
@@ -793,6 +811,7 @@ class DatabaseHelper {
       WHERE startTime >= date('now', '-7 days')
         AND isBreak = 0
         AND completed = 1
+        AND isDeleted = 0
     ''');
 
     final last30DaysResults = await db.rawQuery('''
@@ -801,6 +820,7 @@ class DatabaseHelper {
       WHERE startTime >= date('now', '-30 days')
         AND isBreak = 0
         AND completed = 1
+        AND isDeleted = 0
     ''');
 
     final last7DaysCount = last7DaysResults.first['count'] as int? ?? 0;
@@ -860,6 +880,7 @@ class DatabaseHelper {
       FROM pomodoro_sessions
       WHERE completed = 1
         AND isBreak = 0
+        AND isDeleted = 0
       GROUP BY weekday
       ORDER BY weekday ASC
     ''');
@@ -1131,6 +1152,7 @@ class DatabaseHelper {
       WHERE date(startTime) = date(?)
         AND completed = 1
         AND isBreak = 0
+        AND isDeleted = 0
     ''', [dateStr]);
 
       // データを結果リストに追加（セッションがなければ0として追加）
@@ -1153,6 +1175,8 @@ class DatabaseHelper {
         SUM(durationMinutes) as totalMinutes
       FROM pomodoro_sessions
       WHERE completed = 1
+        AND isBreak = 0
+        AND isDeleted = 0
       GROUP BY strftime('%Y-%W', startTime)
       ORDER BY week DESC
       LIMIT 8
@@ -1187,6 +1211,7 @@ class DatabaseHelper {
         SUM(ps.durationMinutes) as totalMinutes
       FROM tasks t
       LEFT JOIN pomodoro_sessions ps ON t.id = ps.taskId AND ps.completed = 1
+      WHERE t.isDeleted = 0
       GROUP BY t.category
       ORDER BY totalMinutes DESC
     ''');
@@ -1207,6 +1232,7 @@ class DatabaseHelper {
     WHERE startTime BETWEEN ? AND ?
       AND completed = 1
       AND isBreak = 0
+      AND isDeleted = 0
   ''', [thirtyDaysAgo.toIso8601String(), now.toIso8601String()]);
 
     final totalPomodoros = results.first['count'] as int? ?? 0;
@@ -1769,12 +1795,36 @@ class DatabaseHelper {
       );
 
       // 更新を実行
-      return await db.update(
+      final updateResult = await db.update(
         'pomodoro_sessions',
         updatedSession.toMap(),
         where: 'id = ?',
         whereArgs: [id],
       );
+
+      // セッションが正常に更新され、休憩セッションでない場合のみタスク更新
+      if (updateResult > 0 && !session.isBreak) {
+        // このタスクの有効なセッション数を再計算
+        final taskSessionCount = await db.rawQuery('''
+        SELECT COUNT(*) as count
+        FROM pomodoro_sessions
+        WHERE taskId = ? AND isDeleted = 0 AND isBreak = 0 AND completed = 1
+      ''', [session.taskId]);
+
+        // タスクの完了ポモドーロ数を更新
+        final count = taskSessionCount.first['count'] as int? ?? 0;
+        await db.update(
+          'tasks',
+          {
+            'completedPomodoros': count,
+            'updatedAt': DateTime.now().toIso8601String()
+          },
+          where: 'id = ?',
+          whereArgs: [session.taskId],
+        );
+      }
+
+      return updateResult;
     } catch (e) {
       print('ポモドーロセッション論理削除エラー: $e');
       return 0;

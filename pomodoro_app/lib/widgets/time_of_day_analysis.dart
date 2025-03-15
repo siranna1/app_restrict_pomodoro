@@ -15,6 +15,7 @@ class TimeOfDayAnalysis extends StatefulWidget {
 class _TimeOfDayAnalysisState extends State<TimeOfDayAnalysis> {
   bool _isLoading = true;
   List<Map<String, dynamic>> _timeOfDayStats = [];
+  List<Map<String, dynamic>> _timeOfDayStatsUndetailed = [];
 
   @override
   void initState() {
@@ -30,6 +31,9 @@ class _TimeOfDayAnalysisState extends State<TimeOfDayAnalysis> {
     try {
       final stats = await DatabaseHelper.instance
           .getTimeOfDayStatisticsForUI(widget.days);
+      final statsUndetailed = await DatabaseHelper.instance
+          .getTimeOfDayStatisticsForUI(widget.days, isDetailed: false);
+
       // 時間帯の表示順を定義
       final timeOrder = {
         'morning': 0, // 早朝 (5-8時)
@@ -44,9 +48,15 @@ class _TimeOfDayAnalysisState extends State<TimeOfDayAnalysis> {
         return (timeOrder[a['timeOfDay']] ?? 999)
             .compareTo(timeOrder[b['timeOfDay']] ?? 999);
       });
+      statsUndetailed.sort((a, b) {
+        return (timeOrder[a['timeOfDay']] ?? 999)
+            .compareTo(timeOrder[b['timeOfDay']] ?? 999);
+      });
 
       setState(() {
         _timeOfDayStats = stats;
+        _timeOfDayStatsUndetailed = statsUndetailed;
+
         _isLoading = false;
       });
     } catch (e) {
@@ -121,11 +131,13 @@ class _TimeOfDayAnalysisState extends State<TimeOfDayAnalysis> {
                     showTitles: true,
                     getTitlesWidget: (value, meta) {
                       final index = value.toInt();
-                      if (index >= 0 && index < _timeOfDayStats.length) {
+
+                      if (index >= 0 &&
+                          index < _timeOfDayStatsUndetailed.length) {
                         return Padding(
                           padding: const EdgeInsets.only(top: 8.0),
                           child: Text(
-                            _timeOfDayStats[index]['label'] as String,
+                            _timeOfDayStatsUndetailed[index]['label'] as String,
                             style: const TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.bold,

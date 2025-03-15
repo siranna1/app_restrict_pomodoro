@@ -50,6 +50,9 @@ PomodoroSession{
   String? firebaseId;
   String? firebaseTaskId; // Firebase上の関連タスクID
   bool isDeleted;
+  String? deviceId; // セッションを記録したデバイスID
+  String? platformType; // セッションを記録したプラットフォーム種別
+  DateTime updatedAt; // 更新日時（同期用）
   
   // Firebase同期メソッド
   Map<String, dynamic> toFirebase();
@@ -70,6 +73,14 @@ RestrictedApp{
   DateTime? currentSessionEnd;
   String? firebaseId;
   bool isDeleted;
+  bool isAvailableLocally; // ローカルデバイスに存在するかどうか
+  String? deviceId; // アプリが登録されたデバイスID
+  String? platformType; // デバイスのプラットフォーム種別
+  DateTime updatedAt; // 更新日時（同期用）
+  
+  // Firebase同期メソッド
+  Map<String, dynamic> toFirebase();
+  static RestrictedApp fromFirebase(Map<String, dynamic> data);
 }
 ```
 
@@ -107,6 +118,9 @@ AppUsageSession{
   String? appPath; // アプリパス（同期用）
   String? remoteAppId; // リモートアプリID（同期用）
   bool isDeleted;
+  String? deviceId; // セッションを記録したデバイスID
+  String? platformType; // セッションを記録したプラットフォーム種別
+  DateTime updatedAt; // 更新日時（同期用）
   
   // Firebase同期メソッド
   Map<String, dynamic> toFirebase();
@@ -138,7 +152,7 @@ DailyGoal{
 - **データベース初期化・マイグレーション**:
   - `initialize()` - データベース初期化
   - `_createDB()` - テーブルの作成とインデックス設定
-  - `_upgradeDB()` - スキーマアップグレード処理（v1からv6）
+  - `_upgradeDB()` - スキーマアップグレード処理（v1からv9）
   - `_manualMigration()` - 既存インストール向けのスキーマ修正
 
 - **データ取得メソッド**:
@@ -147,12 +161,15 @@ DailyGoal{
   - `getSessionsChangedSince(DateTime timestamp)` - 指定日時以降に変更されたセッション取得
   - `getRestrictedApps()` - 制限アプリ一覧の取得
   - `getRestrictedAppByName(String name)` - 名前による制限アプリ検索
+  - `getRestrictedAppByPath(String path)` - パスによる制限アプリ検索
 
 - **データ操作メソッド**:
   - `insertTask(Task task)` - タスク新規挿入
   - `updateTask(Task task)` - タスク更新
+  - `logicalDeleteTask(int id)` - タスクの論理削除
   - `insertSession(PomodoroSession session)` - セッション新規挿入
   - `updateSession(PomodoroSession session)` - セッション更新
+  - `logicalDeleteSession(int id)` - セッションの論理削除
   - `updateRewardPoints(RewardPoint points)` - ポイント更新
 
 - **統計データメソッド**:
@@ -187,12 +204,14 @@ Firebase同期サービス
 - **同期フロー制御**:
   - 依存関係に基づいた順序付け（タスク→セッション）
   - 時間ベースの重複検出（startTime+endTimeの複合キー）
+  - パスベースのアプリ識別・重複検出
   - 部分的な失敗からの回復（エラーハンドリング）
 
 - **データ整合性管理**:
   - `_handleConflicts()` - 同期競合の解決
   - firebaseIdを使用した一意のマッピング
   - 増分同期によるポイント管理
+  - タイムスタンプベースの競合解決
 
 ### FirebaseRESTService
 Windows向けのREST API実装
@@ -261,6 +280,9 @@ Firebase設定管理
 - Windows/Android/iOS検出
 - プラットフォーム固有機能の抽象化
 - AppPlatformServiceの提供
+- デバイスIDの生成・取得
+- プラットフォーム種別の取得
+- ローカルアプリ一覧の取得（Windows/Android）
 
 ### BackgroundService
 バックグラウンド処理
@@ -343,6 +365,10 @@ TickTick外部APIとの連携
 - **バックグラウンド連携**:
   - `prepareForAppClosure()` - アプリ閉じる時の処理
   - `_syncRestrictedAppsWithBackgroundService()` - 情報同期
+- **デバイス固有の処理**:
+  - `getLocallyAvailableApps()` - ローカルデバイスに存在するアプリの取得
+  - `filterAppsForCurrentPlatform()` - 現在のプラットフォーム向けのアプリをフィルタリング
+  - `detectDuplicateApps()` - 重複アプリの検出とクリーンアップ
 
 ### ThemeProvider
 UIテーマ管理
@@ -370,6 +396,7 @@ TickTick連携管理
 - タスク追加/編集/削除
 - カテゴリ別フィルタリング
 - タスク検索機能
+- 論理削除されたタスクの表示制御
 
 ### StatisticsScreen
 統計分析画面
@@ -377,6 +404,9 @@ TickTick連携管理
 - トレンド分析タブ (TrendAnalysisTab)
 - 詳細分析タブ (DetailedAnalysisTab)
 - セッション履歴タブ (SessionHistoryTab)
+  - セッション一覧表示
+  - スワイプによるセッション削除
+  - 削除済みセッションの表示制御
 - データエクスポート機能
 
 ### SettingsScreen
@@ -409,11 +439,14 @@ Firebase認証画面
 - 設定タブ (制限機能管理)
 - 履歴タブ (アプリ使用履歴)
 - ポイント管理機能
+- デバイス別アプリ表示
+- ローカルに存在しないアプリのグレーアウト表示
 
 ### AppRestrictionScreen
 アプリ制限設定画面
 - 制限アプリ一覧
 - 制限設定管理
+- デバイス別フィルタリング
 
 ### AndroidAppSelectionScreen
 Android向けアプリ選択画面
@@ -496,6 +529,12 @@ TickTickプロジェクト選択ダイアログ
 アプリアイコン表示ウィジェット
 - プラットフォーム対応アイコン表示
 
+### SessionListItem
+セッション一覧アイテムウィジェット
+- セッション情報表示
+- スワイプアクション（削除）
+- 削除済み表示対応
+
 ### チャート関連ウィジェット
 - TimeOfDayAnalysis - 時間帯別生産性分析
 - TaskEfficiencyChart - タスク効率分析
@@ -514,6 +553,8 @@ TickTickプロジェクト選択ダイアログ
 - UsageStatsManagerを利用したアプリ使用状況の監視
 - オーバーレイUIの制御（中央配置、外部タッチで閉じる）
 - 制限アプリの警告通知
+- インストール済みアプリ一覧の取得
+- パッケージ名からアプリ名の取得
 
 ### Windows実装
 
@@ -524,6 +565,8 @@ TickTickプロジェクト選択ダイアログ
 - ファイルロックによる重複インスタンス防止
 - プロセスリスト取得と制限アプリの監視
 - プロセス強制終了機能
+- インストール済みアプリ一覧の取得
+- 実行ファイルパスからアプリ名の取得
 
 ## 8. Firebase連携
 
@@ -545,7 +588,7 @@ TickTickプロジェクト選択ダイアログ
 4. タスク同期（ローカル→リモート、リモート→ローカル）
 5. セッション同期（タスク参照の整合性確保）
 6. ポイント同期（増分計算による整合性確保）
-7. 制限アプリ同期
+7. 制限アプリ同期（デバイス情報を含む）
 8. アプリ使用セッション同期
 9. 同期完了通知（UIリフレッシュ）
 
@@ -559,6 +602,8 @@ TickTickプロジェクト選択ダイアログ
 - 時間ベースの重複検出
 - タスク依存関係の維持
 - ポイント増分計算による競合解決
+- タイムスタンプベースの競合解決（updatedAtを使用）
+- パスベースのアプリ識別・重複検出
 
 ## 9. バックグラウンド処理とシステムトレイ連携
 
@@ -595,20 +640,26 @@ TickTickプロジェクト選択ダイアログ
 - v3→v4: Firebase同期フィールド追加
 - v4→v5: ポモドーロセッションにfirebaseTaskId追加
 - v5→v6: ポイント管理拡張（lastSyncEarnedPoints/lastSyncUsedPoints）
+- v6→v7: セッションとアプリに論理削除フラグ追加
+- v7→v8: セッションとアプリにデバイスID/プラットフォーム種別追加
+- v8→v9: RestrictedAppにisAvailableLocallyフラグと更新日時追加
 
 ### インデックス最適化
 - taskId, startTime, firebaseId など主要検索フィールドのインデックス化
 - 複合インデックスによる検索パフォーマンス向上
+- executablePath のインデックス（アプリパスによる高速検索用）
 
 ## 11. テスト構成
 
 ### ユニットテスト
 - Firebase REST APIテスト
 - データ変換・マッピングテスト
+- 論理削除処理のテスト
 
 ### 結合テスト
 - 同期フローテスト
 - プラットフォーム固有実装テスト
+- クロスデバイス同期テスト
 
 ## 12. プロジェクトファイル構造
 

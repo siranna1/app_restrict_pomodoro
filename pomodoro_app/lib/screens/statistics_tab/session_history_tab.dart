@@ -76,7 +76,8 @@ class _SessionHistoryTabState extends State<SessionHistoryTab> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // フィルター切り替え
-          Padding(
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
             child: Row(
               children: [

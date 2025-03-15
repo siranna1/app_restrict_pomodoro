@@ -54,10 +54,12 @@ class DetailedAnalysisTab extends StatelessWidget {
                 if (categoryData.isEmpty) {
                   return const Center(child: Text('カテゴリデータがありません'));
                 }
-
+                //return const SizedBox(height: 0);
                 return SizedBox(
                   height: 300,
-                  child: CategoryChart(categoryData: categoryData),
+                  child: CategoryChart(
+                    categoryData: categoryData,
+                  ),
                 );
               },
             ),
