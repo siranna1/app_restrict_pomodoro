@@ -70,8 +70,8 @@ class RewardPoint {
       earnedPoints: data['earnedPoints'] ?? 0,
       usedPoints: data['usedPoints'] ?? 0,
       lastUpdated: DateTime.parse(data['lastUpdated']),
-      lastSyncEarnedPoints: data['lastSyncEarnedPoints'],
-      lastSyncUsedPoints: data['lastSyncUsedPoints'],
+      lastSyncEarnedPoints: data['lastSyncEarnedPoints'] ?? 0,
+      lastSyncUsedPoints: data['lastSyncUsedPoints'] ?? 0,
     );
   }
 

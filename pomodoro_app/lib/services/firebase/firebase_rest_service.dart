@@ -303,6 +303,7 @@ class FirebaseRestService {
       if (point.firebaseId != null && point.firebaseId!.isNotEmpty) {
         final updated = await updateData(
           'users/$userId/reward_points/${point.firebaseId}',
+          //'users/$userId/reward_points',
           point.toFirebase(),
         );
         return updated ? point.firebaseId : null;

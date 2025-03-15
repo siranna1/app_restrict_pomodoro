@@ -241,13 +241,14 @@ class SyncService {
       for (var session in changedLocalSessions) {
         // セッションに関連するタスクのFirebase IDを取得
         final taskId = session.taskId;
+        print("taskId: $taskId");
         String? firebaseTaskId = taskMappings[taskId];
 
         if (firebaseTaskId != null) {
           if (session.firebaseId == null ||
               !remoteSessions.containsKey(session.firebaseId)) {
             String? newFirebaseId;
-            session.firebaseId = firebaseTaskId;
+            session.firebaseTaskId = firebaseTaskId;
             if (_useRestApi) {
               newFirebaseId = await _restService.syncSession(userId, session);
             } else {
@@ -258,7 +259,7 @@ class SyncService {
               // セッションデータにタスクのFirebase IDを含める
               final sessionData = session.toFirebase();
               sessionData['firebaseTaskId'] = firebaseTaskId;
-
+              newFirebaseId = newRef.key;
               await newRef.set(sessionData);
             }
             if (newFirebaseId != null) {
@@ -279,6 +280,7 @@ class SyncService {
 
         // 1. すでにfirebaseIdでマッピングされているセッションはスキップ
         if (localSessionFirebaseIds.contains(key)) {
+          print("スキップ");
           continue;
         }
 
@@ -779,6 +781,7 @@ class SyncService {
         final snapshot = event.snapshot;
 
         if (snapshot.exists && snapshot.value != null) {
+          snapshot.key;
           final remoteData = snapshot.value as Map<dynamic, dynamic>;
           remotePointsData = Map<String, dynamic>.from(remoteData.map(
             (k, v) => MapEntry(k.toString(), v),
@@ -787,7 +790,23 @@ class SyncService {
       }
 
       if (remotePointsData != null && remotePointsData.isNotEmpty) {
-        final remotePoints = RewardPoint.fromFirebase(remotePointsData);
+        RewardPoint remotePoints;
+        // 直接のデータ構造かネストされた構造かをチェック
+        if (remotePointsData.containsKey("lastUpdated") ||
+            remotePointsData.containsKey("earnedPoints")) {
+          // 直接のデータ構造（SDK）
+          remotePoints = RewardPoint.fromFirebase(remotePointsData);
+        } else {
+          // Firebase IDを含む余分な階層（REST API）
+          String firebaseId = remotePointsData.keys.first;
+          var pointsData =
+              Map<String, dynamic>.from(remotePointsData[firebaseId]);
+          // Firebase IDを保存
+          //pointsData['firebaseId'] = firebaseId;
+          remotePoints = RewardPoint.fromFirebase(pointsData);
+          remotePoints.firebaseId = firebaseId;
+          print('リモートポイントデータ: $firebaseId}');
+        }
         print(
             'リモートポイント: 獲得=${remotePoints.earnedPoints}, 使用=${remotePoints.usedPoints}, 前回同期獲得=${remotePoints.lastSyncEarnedPoints}, 前回同期使用=${remotePoints.lastSyncUsedPoints}');
 
@@ -828,7 +847,7 @@ class SyncService {
           earnedPoints: newEarnedPoints,
           usedPoints: newUsedPoints,
           lastUpdated: DateTime.now(),
-          firebaseId: localPoints.firebaseId,
+          firebaseId: remotePoints.firebaseId,
           lastSyncEarnedPoints: newEarnedPoints, // 同期完了時点の値を記録
           lastSyncUsedPoints: newUsedPoints, // 同期完了時点の値を記録
         );
@@ -851,7 +870,22 @@ class SyncService {
           }
         } else {
           final pointsRef = _database.child('users/$userId/reward_points');
-          await pointsRef.set(mergedPoints.toFirebase());
+          if (mergedPoints.firebaseId != null) {
+            // 既存のFirebase IDを使用
+            await pointsRef
+                .child(mergedPoints.firebaseId!)
+                .set(mergedPoints.toFirebase());
+          } else {
+            // 新しいFirebase IDを生成
+            final newPointRef = pointsRef.push();
+            final newFirebaseId = newPointRef.key;
+            await newPointRef.set(mergedPoints.toFirebase());
+
+            // 新しいFirebase IDでローカルを更新
+            mergedPoints.firebaseId = newFirebaseId;
+            await _dbHelper.updateRewardPoints(mergedPoints);
+          }
+          //await pointsRef.set(mergedPoints.toFirebase());
         }
 
         print('ポイントデータを増分同期しました: 獲得=$newEarnedPoints, 使用=$newUsedPoints');
@@ -870,7 +904,13 @@ class SyncService {
           }
         } else {
           final pointsRef = _database.child('users/$userId/reward_points');
-          await pointsRef.set(initialPoints.toFirebase());
+          // Firebase SDKでは同じ構造で保存するために
+          final newPointRef = pointsRef.push();
+          final newFirebaseId = newPointRef.key;
+          await newPointRef.set(initialPoints.toFirebase());
+
+          // 新しいFirebase IDでローカルを更新
+          initialPoints.firebaseId = newFirebaseId;
           await _dbHelper.updateRewardPoints(initialPoints);
         }
 
