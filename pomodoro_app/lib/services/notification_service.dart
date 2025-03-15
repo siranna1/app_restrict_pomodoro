@@ -3,12 +3,15 @@ import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:flutter/material.dart';
 import 'package:pomodoro_app/utils/platform_utils.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class NotificationService {
   // 静的フィールドとプライベートコンストラクタを削除し、通常のクラスにする
   final FlutterLocalNotificationsPlugin _flutterLocalNotificationsPlugin =
       FlutterLocalNotificationsPlugin();
   bool _isInitialized = false;
+  //通知がオンに設定されているか
+  bool isNotificationOn = false;
 
   // 一般的なコンストラクタを使用
   NotificationService();
@@ -276,18 +279,32 @@ class NotificationService {
   }
 
   // 通知権限のリクエスト
+  Future<bool> checkAndRequestNotificationPermission() async {
+    // Android 13（API レベル 33）以上では明示的な権限リクエストが必要
+    final status = await Permission.notification.status;
+
+    if (status.isDenied) {
+      // 権限をリクエスト
+      final result = await Permission.notification.request();
+      isNotificationOn = result.isGranted;
+      return result.isGranted;
+    }
+
+    return status.isGranted;
+  }
+
   Future<bool> requestNotificationPermissions() async {
     PlatformUtils platformUtils = PlatformUtils();
     if (platformUtils.isAndroid) {
       // Android 13以上で実行時権限が必要
-      if (int.parse(platformUtils.platform.version.split('.')[0]) >= 13) {
-        final status = await _flutterLocalNotificationsPlugin
-            .resolvePlatformSpecificImplementation<
-                AndroidFlutterLocalNotificationsPlugin>()
-            ?.requestNotificationsPermission();
-        return status ?? false;
-      }
-      return true;
+      //if (int.parse(platformUtils.platform.version.split('.')[0]) >= 13) {
+      final status = await _flutterLocalNotificationsPlugin
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>()
+          ?.requestNotificationsPermission();
+      return status ?? false;
+      //}
+      //return true;
     } else if (platformUtils.isIOS) {
       final status = await _flutterLocalNotificationsPlugin
           .resolvePlatformSpecificImplementation<

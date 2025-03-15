@@ -263,16 +263,43 @@ class _SettingsScreenState extends State<SettingsScreen>
           // 通知と音設定
           _buildSectionHeader(context, '通知と音'),
 
+          // 通知設定セクション
           SwitchListTile(
             title: const Text('通知'),
-            subtitle: const Text('ポモドーロ完了時に通知を表示します'),
-            value: _enableNotifications,
-            onChanged: (value) async {
+            subtitle: const Text('ポモドーロの開始・終了時に通知を表示します'),
+            value: _enableNotifications, // この値はSettingsServiceから取得
+            onChanged: (bool value) async {
+              // 通知を有効にする場合は権限を確認
+              if (value && Platform.isAndroid) {
+                final granted = await NotificationService()
+                    .checkAndRequestNotificationPermission();
+                if (!granted) {
+                  // 権限が得られなかった場合は設定アプリへの誘導
+                  if (context.mounted) {
+                    showDialog(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('通知権限が必要です'),
+                        content:
+                            const Text('ポモドーロタイマーの通知を受け取るには、設定から通知を許可してください。'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('キャンセル'),
+                          ),
+                        ],
+                      ),
+                    );
+                    return;
+                  }
+                }
+              }
+
+              // SettingsServiceに値を保存
+              await _settingsService?.setNotificationsEnabled(value);
               setState(() {
                 _enableNotifications = value;
               });
-
-              await _settingsService!.setNotificationsEnabled(value);
             },
           ),
 
