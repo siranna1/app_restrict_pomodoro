@@ -78,6 +78,18 @@ class TickTickProvider with ChangeNotifier {
     }
   }
 
+  // 連携解除（ログアウト）
+  Future<bool> logout() async {
+    final success = await _tickTickService.logout();
+    if (success) {
+      isAuthenticated = false;
+      _projects.clear();
+      lastSyncTime = null;
+      notifyListeners();
+    }
+    return success;
+  }
+
   // ポモドーロセッション完了をTickTickに記録
   Future<bool> recordPomodoroSession(Task task, int durationMinutes) async {
     if (!isAuthenticated || task.tickTickId == null) {
