@@ -126,7 +126,7 @@ class SyncSettingScreen extends StatelessWidget {
                 // 未認証の場合は認証ダイアログを表示
                 final result = await showDialog<bool>(
                   context: context,
-                  builder: (context) => LoginScreen(),
+                  builder: (context) => AuthDialog(), //LoginScreen(),
                 );
 
                 if (result == true) {

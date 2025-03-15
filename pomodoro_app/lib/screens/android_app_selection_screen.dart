@@ -18,12 +18,12 @@ class _AndroidAppSelectionScreenState extends State<AndroidAppSelectionScreen> {
   final _androidAppController = AndroidAppController();
   // アプリ情報を格納する変数を変更
   List<AppInfo> _installedApps = [];
-  List<String> _selectedPackages = [];
+  Map<String, int> _appPointSettings = {};
   bool _isLoading = true;
   String _searchQuery = '';
   final _searchController = TextEditingController();
-  final _minutesPerPointController = TextEditingController(text: '30');
-  int _minutesPerPoint = 30;
+  //final _minutesPerPointController = TextEditingController(text: '30');
+  final int _defaultMinutesPerPoint = 30;
 
   @override
   void initState() {
@@ -76,21 +76,16 @@ class _AndroidAppSelectionScreenState extends State<AndroidAppSelectionScreen> {
       final appRestrictionProvider =
           Provider.of<AppRestrictionProvider>(context, listen: false);
       final restrictedApps = appRestrictionProvider.restrictedApps;
-      final restrictedPackages = restrictedApps
-          .where((app) => app.isRestricted)
-          .map((app) => app.executablePath)
-          .toList();
-
-      // デフォルトの分あたりポイント数を取得（既存のアプリから）
-      if (restrictedApps.isNotEmpty) {
-        _minutesPerPoint = restrictedApps.first.minutesPerPoint;
-        _minutesPerPointController.text = _minutesPerPoint.toString();
+      // 既存のアプリのポイント設定を保存
+      Map<String, int> pointSettings = {};
+      for (var app in restrictedApps) {
+        pointSettings[app.executablePath] = app.minutesPerPoint;
       }
 
       if (mounted) {
         setState(() {
           _installedApps = apps;
-          _selectedPackages = List.from(restrictedPackages);
+          _appPointSettings = pointSettings;
           _isLoading = false;
         });
       }
@@ -110,42 +105,35 @@ class _AndroidAppSelectionScreenState extends State<AndroidAppSelectionScreen> {
   // 選択したアプリを保存
   Future<void> _saveSelectedApps() async {
     try {
-      // 分あたりポイント数を解析
-      final minutesPerPoint =
-          int.tryParse(_minutesPerPointController.text) ?? 30;
-      if (minutesPerPoint <= 0) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('1ポイントあたりの分数は1以上にしてください')),
-        );
-        return;
-      }
-
-      _minutesPerPoint = minutesPerPoint;
-
       final appRestrictionProvider =
           Provider.of<AppRestrictionProvider>(context, listen: false);
-
-      // 現在の制限アプリリスト
-      final existingApps = appRestrictionProvider.restrictedApps;
-
-      // 既存の制限アプリを更新
-      for (final app in existingApps) {
-        // パッケージ名をexecutablePathとして扱う
-        final isSelected = _selectedPackages.contains(app.executablePath);
-        if (app.isRestricted != isSelected ||
-            app.minutesPerPoint != _minutesPerPoint) {
-          await appRestrictionProvider.updateRestrictedApp(
-            app.copyWith(
-              isRestricted: isSelected,
-            ),
+      // 設定したアプリのみを処理
+      RestrictedApp? existingApp;
+      for (String packageName in _appPointSettings.keys) {
+        // 既存のアプリを確認
+        try {
+          existingApp = appRestrictionProvider.restrictedApps.firstWhere(
+            (app) => app.executablePath == packageName,
           );
+        } catch (_) {
+          existingApp = null;
         }
-      }
 
-      // 新しく選択されたアプリを追加
-      for (final packageName in _selectedPackages) {
-        // 既存のアプリリストにないパッケージのみ追加
-        if (!existingApps.any((app) => app.executablePath == packageName)) {
+        final minutesPerPoint =
+            _appPointSettings[packageName] ?? _defaultMinutesPerPoint;
+
+        if (existingApp != null) {
+          // 既存アプリの場合は更新
+          if (existingApp.minutesPerPoint != minutesPerPoint) {
+            await appRestrictionProvider.updateRestrictedApp(
+              existingApp.copyWith(
+                minutesPerPoint: minutesPerPoint,
+                isRestricted: true,
+              ),
+            );
+          }
+        } else {
+          // 新規アプリの場合は追加
           // アプリ名を取得
           final appInfo = _installedApps.firstWhere(
             (app) => app.packageName == packageName,
@@ -157,15 +145,12 @@ class _AndroidAppSelectionScreenState extends State<AndroidAppSelectionScreen> {
             ),
           );
 
-          final appName = appInfo.name;
-
-          // 新しいRestrictedAppを作成
           final newApp = RestrictedApp(
-            name: appName,
+            name: appInfo.name,
             executablePath: packageName,
             allowedMinutesPerDay: 0,
             isRestricted: true,
-            minutesPerPoint: _minutesPerPoint,
+            minutesPerPoint: minutesPerPoint,
           );
 
           await appRestrictionProvider.addRestrictedApp(newApp);
@@ -243,7 +228,7 @@ class _AndroidAppSelectionScreenState extends State<AndroidAppSelectionScreen> {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 Text(
-                  '${_selectedPackages.length}個のアプリを選択中',
+                  '${{_appPointSettings.length}}個のアプリを選択中',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     color: Theme.of(context).primaryColor,
@@ -251,21 +236,11 @@ class _AndroidAppSelectionScreenState extends State<AndroidAppSelectionScreen> {
                 ),
                 const Spacer(),
                 TextButton.icon(
-                  icon: const Icon(Icons.select_all),
-                  label: const Text('すべて選択'),
-                  onPressed: () {
-                    setState(() {
-                      _selectedPackages =
-                          _installedApps.map((app) => app.packageName).toList();
-                    });
-                  },
-                ),
-                TextButton.icon(
                   icon: const Icon(Icons.deselect),
                   label: const Text('選択解除'),
                   onPressed: () {
                     setState(() {
-                      _selectedPackages = [];
+                      _appPointSettings = {};
                     });
                   },
                 ),
@@ -286,80 +261,53 @@ class _AndroidAppSelectionScreenState extends State<AndroidAppSelectionScreen> {
                           final packageName = app.packageName;
                           final appName = app.name;
                           final isSelected =
-                              _selectedPackages.contains(packageName);
+                              _appPointSettings.containsKey(packageName);
+                          final minutesPerPoint =
+                              _appPointSettings[packageName] ??
+                                  _defaultMinutesPerPoint;
 
-                          return CheckboxListTile(
+                          return ListTile(
                             title: Text(appName),
-                            subtitle: Text(packageName),
-                            value: isSelected,
-                            onChanged: (value) {
-                              setState(() {
-                                if (value == true) {
-                                  _selectedPackages.add(packageName);
-                                } else {
-                                  _selectedPackages.remove(packageName);
-                                }
-                              });
+                            subtitle: isSelected
+                                ? Text(
+                                    '$packageName (1ポイント = $minutesPerPoint分)')
+                                : Text(packageName),
+                            leading: AppIconWidget(iconBase64: app.iconBase64),
+                            trailing: isSelected
+                                ? IconButton(
+                                    icon: const Icon(
+                                        Icons.remove_circle_outline,
+                                        color: Colors.red),
+                                    onPressed: () {
+                                      setState(() {
+                                        _appPointSettings.remove(packageName);
+                                      });
+                                    },
+                                  )
+                                : IconButton(
+                                    icon: const Icon(Icons.add_circle_outline,
+                                        color: Colors.green),
+                                    onPressed: () async {
+                                      await _showPointSettingDialog(
+                                          packageName, appName);
+                                    },
+                                  ),
+                            onTap: () async {
+                              if (isSelected) {
+                                // 既に選択済みの場合は設定を変更
+                                await _showPointSettingDialog(
+                                    packageName, appName);
+                              } else {
+                                // 未選択の場合は新規設定
+                                await _showPointSettingDialog(
+                                    packageName, appName);
+                              }
                             },
-                            secondary:
-                                AppIconWidget(iconBase64: app.iconBase64),
                           );
                         },
                       ),
           ),
-          // 制限時間設定
-          Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'ポイント設定',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _minutesPerPointController,
-                            decoration: const InputDecoration(
-                              labelText: '1ポイントあたりの使用時間（分）',
-                              border: OutlineInputBorder(),
-                            ),
-                            keyboardType: TextInputType.number,
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Builder(
-                          builder: (context) {
-                            final minutes =
-                                int.tryParse(_minutesPerPointController.text) ??
-                                    30;
-                            final pointsPerHour = (60 / minutes).ceil();
-                            return Text(
-                              '1時間 = $pointsPerHour ポイント',
-                              style: TextStyle(
-                                color: Colors.grey[600],
-                                fontSize: 14,
-                              ),
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
+
           // 下部のアクションボタン
           Padding(
             padding: const EdgeInsets.all(16.0),
@@ -392,6 +340,80 @@ class _AndroidAppSelectionScreenState extends State<AndroidAppSelectionScreen> {
         ],
       ),
     );
+  }
+
+  // ポイント設定ダイアログを表示
+  Future<void> _showPointSettingDialog(
+      String packageName, String appName) async {
+    // 現在のポイント設定を取得（存在しない場合はデフォルト値を使用）
+    int currentValue =
+        _appPointSettings[packageName] ?? _defaultMinutesPerPoint;
+    TextEditingController controller =
+        TextEditingController(text: currentValue.toString());
+
+    final result = await showDialog<int>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('$appNameのポイント設定'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextField(
+                controller: controller,
+                decoration: const InputDecoration(
+                  labelText: '1ポイントあたりの使用時間（分）',
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.number,
+              ),
+              const SizedBox(height: 16),
+              Builder(
+                builder: (context) {
+                  final minutes =
+                      int.tryParse(controller.text) ?? _defaultMinutesPerPoint;
+                  final pointsPerHour = (60 / minutes).ceil();
+                  return Text(
+                    '1時間 = $pointsPerHour ポイント',
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                      fontSize: 14,
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('キャンセル'),
+            ),
+            TextButton(
+              onPressed: () {
+                final value = int.tryParse(controller.text);
+                if (value != null && value > 0) {
+                  Navigator.of(context).pop(value);
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('有効な数値を入力してください')),
+                  );
+                }
+              },
+              child: const Text('設定'),
+            ),
+          ],
+        );
+      },
+    );
+
+    // 結果を保存
+    if (result != null) {
+      setState(() {
+        _appPointSettings[packageName] = result;
+      });
+    }
   }
 
   // アプリをフィルタリングするメソッド（AppInfo型を対応）

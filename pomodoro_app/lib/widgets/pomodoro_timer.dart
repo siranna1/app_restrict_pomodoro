@@ -74,76 +74,79 @@ class PomodoroTimer extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                if (!isRunning)
-                  ElevatedButton.icon(
-                    icon: const Icon(Icons.play_arrow),
-                    label: const Text('開始'),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 12,
-                      ),
-                    ),
-                    onPressed: onStart,
-                  )
-                else if (isPaused)
-                  ElevatedButton.icon(
-                    icon: const Icon(Icons.play_arrow),
-                    label: const Text('再開'),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 12,
-                      ),
-                    ),
-                    onPressed: onResume,
-                  )
-                else
-                  ElevatedButton.icon(
-                    icon: const Icon(Icons.pause),
-                    label: const Text('一時停止'),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 12,
-                      ),
-                    ),
-                    onPressed: onPause,
-                  ),
-                const SizedBox(width: 16),
-                if (isRunning)
-                  Row(
-                    // 複数のボタンを横に並べる
-                    children: [
-                      OutlinedButton.icon(
-                        icon: const Icon(Icons.stop),
-                        label: const Text('中止'),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
-                          ),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (!isRunning)
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.play_arrow),
+                      label: const Text('開始'),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 12,
                         ),
-                        onPressed: onCancel,
                       ),
-                      const SizedBox(width: 8),
-                      OutlinedButton.icon(
-                        icon: const Icon(Icons.skip_next),
-                        label: const Text('スキップ'),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
-                          ),
+                      onPressed: onStart,
+                    )
+                  else if (isPaused)
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.play_arrow),
+                      label: const Text('再開'),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 12,
                         ),
-                        onPressed: onSkip,
                       ),
-                    ],
-                  ),
-              ],
+                      onPressed: onResume,
+                    )
+                  else
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.pause),
+                      label: const Text('一時停止'),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 12,
+                        ),
+                      ),
+                      onPressed: onPause,
+                    ),
+                  const SizedBox(width: 16),
+                  if (isRunning)
+                    Row(
+                      // 複数のボタンを横に並べる
+                      children: [
+                        ElevatedButton.icon(
+                          icon: const Icon(Icons.stop),
+                          label: const Text('中止'),
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
+                          ),
+                          onPressed: onCancel,
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton.icon(
+                          icon: const Icon(Icons.skip_next),
+                          label: const Text('スキップ'),
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
+                          ),
+                          onPressed: onSkip,
+                        ),
+                      ],
+                    ),
+                ],
+              ),
             ),
           ],
         ),

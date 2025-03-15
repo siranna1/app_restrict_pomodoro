@@ -188,6 +188,8 @@ class _DailyProgressState extends State<DailyProgress> {
         SUM(durationMinutes) as totalMinutes
       FROM pomodoro_sessions
       WHERE date(startTime) = date(?)
+      AND isBreak = 0
+      AND isDeleted = 0
     ''', [today]);
 
     int totalPomodoros = 0;
