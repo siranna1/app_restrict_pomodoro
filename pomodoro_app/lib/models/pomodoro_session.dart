@@ -99,6 +99,7 @@ class PomodoroSession {
       'mood': mood,
       'isBreak': isBreak ? 1 : 0,
       'firebaseId': firebaseId,
+      'firebaseTaskId': firebaseTaskId,
       'isDeleted': isDeleted ? 1 : 0,
       'updatedAt': updatedAt.toIso8601String(),
     };
@@ -118,6 +119,7 @@ class PomodoroSession {
       mood: map['mood'],
       isBreak: map['isBreak'] == 1,
       firebaseId: map['firebaseId'],
+      firebaseTaskId: map['firebaseTaskId'],
       isDeleted: map['isDeleted'] == 1,
       updatedAt: map['updatedAt'] != null
           ? DateTime.parse(map['updatedAt'])
@@ -138,6 +140,7 @@ class PomodoroSession {
     String? mood,
     bool? isBreak,
     String? firebaseId,
+    String? firebaseTaskId,
     bool? isDeleted,
     DateTime? updatedAt,
   }) {
@@ -154,6 +157,7 @@ class PomodoroSession {
       mood: mood ?? this.mood,
       isBreak: isBreak ?? this.isBreak,
       firebaseId: firebaseId ?? this.firebaseId,
+      firebaseTaskId: firebaseTaskId ?? this.firebaseTaskId,
       isDeleted: isDeleted ?? this.isDeleted,
       updatedAt: updatedAt ?? DateTime.now(),
     );
@@ -173,6 +177,7 @@ class PomodoroSession {
       'isBreak': isBreak,
       'isDeleted': isDeleted,
       'updatedAt': updatedAt.toIso8601String(),
+      'firebaseTaskId': firebaseTaskId,
     };
   }
 

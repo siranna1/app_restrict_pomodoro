@@ -100,6 +100,7 @@ class DatabaseHelper {
       mood TEXT,
       isBreak INTEGER DEFAULT 0,
       firebaseId TEXT,
+      FirebaseTaskId TEXT,
       isDeleted INTEGER DEFAULT 0,
       updatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (taskId) REFERENCES tasks (id) ON DELETE CASCADE
