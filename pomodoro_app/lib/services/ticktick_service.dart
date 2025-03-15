@@ -163,6 +163,29 @@ class TickTickService {
     }
   }
 
+  // 連携解除・ログアウト処理
+  Future<bool> logout() async {
+    try {
+      // SharedPreferencesからトークン情報を削除
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('ticktick_access_token');
+      await prefs.remove('ticktick_refresh_token');
+      await prefs.remove('ticktick_token_expiry');
+
+      // メモリ上のトークン情報もクリア
+      _accessToken = null;
+      _refreshToken = null;
+      _tokenExpiry = null;
+      _projectIdToNameMap.clear();
+
+      print('TickTick連携解除完了');
+      return true;
+    } catch (e) {
+      print('TickTick連携解除エラー: $e');
+      return false;
+    }
+  }
+
   // APIリクエストの共通処理
   Future<http.Response?> _apiRequest(String method, String endpoint,
       {Map<String, dynamic>? body}) async {

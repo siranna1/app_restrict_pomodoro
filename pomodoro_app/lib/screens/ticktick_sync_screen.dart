@@ -253,9 +253,26 @@ class _TickTickSyncScreenState extends State<TickTickSyncScreen> {
                           style: TextButton.styleFrom(
                             foregroundColor: Colors.red,
                           ),
-                          onPressed: () {
+                          onPressed: () async {
                             // 連携解除処理
                             Navigator.of(context).pop();
+                            // 連携解除処理を実行
+                            final tickTickProvider =
+                                Provider.of<TickTickProvider>(context,
+                                    listen: false);
+                            final success = await tickTickProvider.logout();
+
+                            if (success) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                    content: Text('TickTickとの連携を解除しました')),
+                              );
+                            } else {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                    content: Text('連携解除中にエラーが発生しました')),
+                              );
+                            }
                           },
                         ),
                       ],
