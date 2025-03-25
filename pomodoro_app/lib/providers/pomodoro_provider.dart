@@ -10,7 +10,9 @@ import '../providers/task_provider.dart';
 import 'app_restriction_provider.dart';
 import '../services/sound_service.dart';
 import '../utils/global_context.dart';
+import '../utils/platform_utils.dart';
 import '../services/settings_service.dart';
+import 'package:flutter/services.dart';
 
 class PomodoroProvider with ChangeNotifier {
   // タイマー設定
@@ -39,12 +41,19 @@ class PomodoroProvider with ChangeNotifier {
   final TaskProvider? taskProvider;
   final SoundService soundService;
 
+  // MethodChannelを追加
+  static const MethodChannel _channel =
+      MethodChannel('com.example.pomodoro_app/pomodoro_timer');
+  bool _hasNativeTimerService = false;
+
   PomodoroProvider({
     required this.notificationService,
     this.taskProvider,
     required this.soundService,
   }) {
     _loadSettings();
+    _initializeMethodChannel();
+    _checkTimerStatus();
   }
   Future<void> _loadSettings() async {
     // 設定の読み込み
@@ -55,8 +64,79 @@ class PomodoroProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  // MethodChannelの初期化
+  Future<void> _initializeMethodChannel() async {
+    _channel.setMethodCallHandler(_handleMethodCall);
+    PlatformUtils platform = PlatformUtils();
+    // プラットフォームがAndroidかチェック
+    try {
+      _hasNativeTimerService = platform.isAndroid;
+
+      print('MethodChannelハンドラ設定完了');
+    } catch (e) {
+      _hasNativeTimerService = false;
+    }
+  }
+
+  // タイマー状態を確認するメソッド
+  Future<void> _checkTimerStatus() async {
+    if (_hasNativeTimerService) {
+      try {
+        final result = await _channel.invokeMethod('getTimerStatus');
+        if (result != null && result is Map) {
+          final isTimerRunning = result['isRunning'] ?? false;
+
+          if (isTimerRunning) {
+            print('タイマーが実行中です。タスク情報を復元します。');
+            isRunning = result['isRunning'] ?? false;
+            isPaused = result['isPaused'] ?? false;
+            isBreak = result['isBreak'] ?? false;
+            remainingSeconds = result['remainingSeconds'] ?? 0;
+            totalSeconds = result['totalSeconds'] ?? 0;
+
+            // タスク情報を復元
+            await _loadCurrentTaskInfo();
+
+            notifyListeners();
+          }
+        }
+      } catch (e) {
+        print('タイマー状態確認エラー: $e');
+      }
+    }
+  }
+
+  void readyForPomodoro(Task task) async {
+    if (task.id != null) {
+      final freshTask = await DatabaseHelper.instance.getTask(task.id!);
+      if (freshTask != null) {
+        currentTask = freshTask;
+        print('ポモドーロ開始: 最新のタスク情報を取得 - firebaseId: ${freshTask.firebaseId}');
+      } else {
+        currentTask = task;
+      }
+    } else {
+      currentTask = task;
+    }
+    isRunning = false;
+    isPaused = false;
+    isBreak = false;
+
+    totalSeconds = workDuration * 60;
+    remainingSeconds = totalSeconds;
+    sessionStartTime = DateTime.now();
+    // タスク情報を保存
+    _saveCurrentTaskInfo();
+
+    notifyListeners();
+  }
+
   // タイマーを開始
   void startTimer(Task task) async {
+    if (isBreak) {
+      startBreak();
+      return;
+    }
     if (task.id != null) {
       final freshTask = await DatabaseHelper.instance.getTask(task.id!);
       if (freshTask != null) {
@@ -76,6 +156,24 @@ class PomodoroProvider with ChangeNotifier {
     remainingSeconds = totalSeconds;
     sessionStartTime = DateTime.now();
 
+    if (_hasNativeTimerService) {
+      // ネイティブのバックグラウンドサービスを使用
+      try {
+        await _channel.invokeMethod('startPomodoro', {
+          'minutes': workDuration,
+          'taskId': currentTask?.id ?? -1,
+          'taskName': currentTask?.name ?? "タスクなし",
+        });
+      } catch (e) {
+        print('ネイティブタイマー開始エラー: $e');
+        _startCountdown(); // フォールバック: Dartでタイマーを実行
+      }
+    } else {
+      // 通常のDartタイマーを使用
+      _startCountdown();
+    }
+    // タスク情報を保存
+    _saveCurrentTaskInfo();
     //_startCountdown();
     notifyListeners();
   }
@@ -92,6 +190,22 @@ class PomodoroProvider with ChangeNotifier {
 
     totalSeconds = breakDuration * 60;
     remainingSeconds = totalSeconds;
+
+    if (_hasNativeTimerService) {
+      // ネイティブのバックグラウンドサービスを使用
+      try {
+        _channel.invokeMethod('startBreak', {
+          'minutes': breakDuration,
+          'isLongBreak': isLongBreak,
+        });
+      } catch (e) {
+        print('ネイティブ休憩タイマー開始エラー: $e');
+        _startCountdown(); // フォールバック: Dartでタイマーを実行
+      }
+    } else {
+      // 通常のDartタイマーを使用
+      _startCountdown();
+    }
 
     //_startCountdown();
     notifyListeners();
@@ -113,8 +227,8 @@ class PomodoroProvider with ChangeNotifier {
         } else {
           soundService.playBreakCompleteSound();
           // 休憩が完了
-          //isBreak = false;
-          //isRunning = false;
+          isBreak = false;
+          isRunning = false;
           startTimer(currentTask!);
           //notificationService.showNotification('休憩終了', '次のポモドーロセッションを始めましょう。');
           final context = GlobalContext.context;
@@ -148,10 +262,6 @@ class PomodoroProvider with ChangeNotifier {
           ? 'ポモドーロをスキップしました。$customDuration分間の作業を記録しました。'
           : '休憩時間です。次のセッションを始める準備をしましょう。';
       final title = customDuration != null ? 'ポモドーロスキップ' : 'ポモドーロ完了';
-      //notificationService.showNotification(
-      //  title,
-      //  message,
-      //);
       final context = GlobalContext.context;
       notificationService.showNotificationBasedOnState(
         context,
@@ -163,6 +273,8 @@ class PomodoroProvider with ChangeNotifier {
       );
       // 休憩モードに移行
       startBreak();
+      // タスク情報を保存
+      _saveCurrentTaskInfo();
     } catch (e) {
       print('ポモドーロ完了の処理中にエラーが発生しました: $e');
     }
@@ -173,6 +285,15 @@ class PomodoroProvider with ChangeNotifier {
     if (!isRunning) return;
 
     _timer?.cancel();
+    if (_hasNativeTimerService) {
+      try {
+        await _channel.invokeMethod('skipTimer');
+        return; // ネイティブ側で処理するので以降は実行しない
+      } catch (e) {
+        print('ネイティブタイマースキップエラー: $e');
+        // エラーの場合は従来のロジックでフォールバック
+      }
+    }
 
     // 現在の経過時間を記録
     final elapsedSeconds = totalSeconds - remainingSeconds;
@@ -311,6 +432,13 @@ class PomodoroProvider with ChangeNotifier {
     if (isRunning && !isPaused) {
       isPaused = true;
       _timer?.cancel();
+      if (_hasNativeTimerService) {
+        try {
+          _channel.invokeMethod('pausePomodoro');
+        } catch (e) {
+          print('ネイティブタイマー一時停止エラー: $e');
+        }
+      }
       soundService.stopAllSounds(); // 音を停止
       countInterruption(); // 中断カウントを追加
       notifyListeners();
@@ -320,8 +448,16 @@ class PomodoroProvider with ChangeNotifier {
   // タイマーを再開
   void resumeTimer() {
     if (isRunning && isPaused) {
-      isPaused = false;
-      _startCountdown();
+      if (_hasNativeTimerService) {
+        try {
+          _channel.invokeMethod('resumePomodoro');
+        } catch (e) {
+          print('ネイティブタイマー再開エラー: $e');
+          _startCountdown(); // フォールバック: Dartでタイマーを実行
+        }
+      } else {
+        _startCountdown();
+      }
       soundService.stopAllSounds(); // 音を停止
       notifyListeners();
     }
@@ -330,6 +466,13 @@ class PomodoroProvider with ChangeNotifier {
   // タイマーをキャンセル
   void cancelTimer() {
     _timer?.cancel();
+    if (_hasNativeTimerService) {
+      try {
+        _channel.invokeMethod('stopPomodoro');
+      } catch (e) {
+        print('ネイティブタイマー停止エラー: $e');
+      }
+    }
     isRunning = false;
     isPaused = false;
     soundService.stopAllSounds(); // 音を停止
@@ -371,6 +514,139 @@ class PomodoroProvider with ChangeNotifier {
   //   }
   // }
 
+  // ネイティブからのコールを処理
+  Future<dynamic> _handleMethodCall(MethodCall call) async {
+    print("なにか来たよ${call.method}");
+    switch (call.method) {
+      case "timerUpdate":
+        // ネイティブからタイマー状態の更新
+        final Map<dynamic, dynamic> args = call.arguments;
+        print('受信したタイマー更新: $args');
+
+        // データ型を明示的に変換
+        isRunning = args['isRunning'] == true;
+        isPaused = args['isPaused'] == true;
+        isBreak = args['isBreak'] == true;
+
+        // int型への明示的な変換
+        if (args['remainingSeconds'] != null) {
+          try {
+            remainingSeconds = int.parse(args['remainingSeconds'].toString());
+          } catch (e) {
+            print('remainingSeconds変換エラー: $e');
+          }
+        }
+
+        if (args['totalSeconds'] != null) {
+          try {
+            totalSeconds = int.parse(args['totalSeconds'].toString());
+          } catch (e) {
+            print('totalSeconds変換エラー: $e');
+          }
+        }
+
+        // タスク情報がない場合は復元を試みる
+        if (isRunning && currentTask == null) {
+          _loadCurrentTaskInfo().then((_) {
+            notifyListeners();
+          });
+        }
+        notifyListeners();
+        break;
+
+      case 'pomodoroComplete':
+        // ポモドーロ完了通知
+        final Map<dynamic, dynamic> data = call.arguments;
+        print("ポモドーロ完了通知: $data");
+        if (currentTask != null &&
+            currentTask!.id == int.parse(data['taskId'].toString())) {
+          // セッション時間を記録
+          await _saveSession(int.parse(data['durationMinutes'].toString()));
+
+          // 通知処理
+          await soundService.playPomodoroCompleteSound();
+          final context = GlobalContext.context;
+          notificationService.showNotificationBasedOnState(
+            context,
+            'ポモドーロ完了',
+            '休憩時間です。開始ボタンを押して休憩を始めましょう。',
+            onDismiss: () => soundService.stopAllSounds(),
+            payload: 'pomodoro_complete',
+            channel: 'pomodoro_channel',
+          );
+
+          isRunning = false;
+          isPaused = false;
+          isBreak = true;
+          // 長い休憩か短い休憩かを決定
+          final isLongBreak = (completedPomodoros % longBreakInterval == 0);
+          final breakDuration =
+              isLongBreak ? longBreakDuration : shortBreakDuration;
+
+          totalSeconds = breakDuration * 60;
+          remainingSeconds = totalSeconds;
+          notifyListeners();
+        }
+        break;
+
+      case 'pomodoroSkipped':
+        // ポモドーロスキップ通知
+        final Map<dynamic, dynamic> data = call.arguments;
+        print("ポモドーロスキップ通知: $data");
+        if (currentTask != null &&
+            currentTask!.id == int.parse(data['taskId'].toString())) {
+          // 実際に作業した時間を記録
+          await _saveSession(int.parse(data['durationMinutes'].toString()));
+
+          await soundService.playPomodoroCompleteSound();
+          final context = GlobalContext.context;
+          notificationService.showNotificationBasedOnState(
+            context,
+            'ポモドーロスキップ',
+            '${int.parse(data['durationMinutes'].toString())}分間の作業を記録しました。',
+            onDismiss: () => soundService.stopAllSounds(),
+            payload: 'pomodoro_skipped',
+            channel: 'pomodoro_channel',
+          );
+
+          isRunning = false;
+          isPaused = false;
+          isBreak = true;
+          // 長い休憩か短い休憩かを決定
+          final isLongBreak = (completedPomodoros % longBreakInterval == 0);
+          final breakDuration =
+              isLongBreak ? longBreakDuration : shortBreakDuration;
+
+          totalSeconds = breakDuration * 60;
+          remainingSeconds = totalSeconds;
+          notifyListeners();
+        }
+        break;
+
+      case 'breakComplete':
+        // 休憩完了通知
+        await soundService.playBreakCompleteSound();
+        final context = GlobalContext.context;
+        notificationService.showNotificationBasedOnState(
+          context,
+          '休憩終了',
+          '次のポモドーロセッションを始めましょう。',
+          channel: 'break_channel',
+          payload: 'break_completed',
+          onDismiss: () => soundService.stopAllSounds(),
+        );
+
+        readyForPomodoro(currentTask!);
+
+        notifyListeners();
+        break;
+
+      default:
+        print('Unknown method call: ${call.method}');
+    }
+    return null;
+  }
+
   // 設定を保存
   Future<void> saveSettings({
     int? workDuration,
@@ -399,6 +675,43 @@ class PomodoroProvider with ChangeNotifier {
     }
 
     notifyListeners();
+  }
+
+  // タスク情報を保存
+  Future<void> _saveCurrentTaskInfo() async {
+    if (currentTask?.id != null) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('current_task_id', currentTask!.id!);
+      await prefs.setBool('is_timer_running', isRunning);
+      await prefs.setBool('is_break', isBreak);
+      await prefs.setInt('complete_pomodoros', completedPomodoros);
+      await prefs.setInt('longBreakInterval', longBreakInterval);
+      print('現在のタスク情報を保存: ${currentTask!.id}');
+    }
+  }
+
+  // タスク情報を読み込む
+  Future<void> _loadCurrentTaskInfo() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final taskId = prefs.getInt('current_task_id');
+
+      if (taskId != null) {
+        print('保存されたタスクID: $taskId');
+        final task = await DatabaseHelper.instance.getTask(taskId);
+
+        if (task != null) {
+          currentTask = task;
+          print('タスク情報を復元: ${task.name}');
+          isRunning = prefs.getBool('is_timer_running') ?? false;
+          isBreak = prefs.getBool('is_break') ?? false;
+          completedPomodoros = prefs.getInt('complete_pomodoros') ?? 0;
+          longBreakInterval = prefs.getInt('longBreakInterval') ?? 4;
+        }
+      }
+    } catch (e) {
+      print('タスク情報の読み込みエラー: $e');
+    }
   }
 
   @override
