@@ -1033,15 +1033,20 @@ class SyncService {
           } else if (appName != null) {
             // 対応するアプリがない場合は「未知のアプリ」として記録
             // まず「未知のアプリ」カテゴリを作成または検索
-            int unknownAppId = await _getOrCreateUnknownApp(appName, appPath,
-                platformType: platformType, DeviceId: deviceId);
+            //セッションデータに名前が含まれてるから、アプリのダウンロードはいらない
+            // int unknownAppId = await _getOrCreateUnknownApp(appName, appPath,
+            //     platformType: platformType, DeviceId: deviceId);
 
+            // final session = AppUsageSession.fromFirebase(sessionData);
+            // session.firebaseId = key;
+            // session.appId = unknownAppId;
+            // session.remoteAppId = remoteAppId;
+            // await _dbHelper.insertAppUsageSession(session);
+            // print('未知のアプリセッションをダウンロード: $appName');
             final session = AppUsageSession.fromFirebase(sessionData);
             session.firebaseId = key;
-            session.appId = unknownAppId;
-            session.remoteAppId = remoteAppId;
             await _dbHelper.insertAppUsageSession(session);
-            print('未知のアプリセッションをダウンロード: $appName');
+            print('端末にないリモートアプリ使用セッションをダウンロード: $appName');
           }
         }
       }
