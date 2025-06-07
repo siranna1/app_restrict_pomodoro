@@ -146,7 +146,7 @@ class _SessionHistoryTabState extends State<SessionHistoryTab> {
                             ),
                             const SizedBox(width: 8),
                             Text(
-                              '(${sessions.length}セッション)',
+                              '(${_calculateTotalWorkTime(sessions)})',
                               style: TextStyle(
                                 color: Colors.grey[700],
                                 fontSize: 14,
@@ -463,6 +463,33 @@ class _SessionHistoryTabState extends State<SessionHistoryTab> {
         return '深夜';
       default:
         return timeOfDay;
+    }
+  }
+
+  // その日の総作業時間を計算
+  String _calculateTotalWorkTime(List<Map<String, dynamic>> sessions) {
+    int totalMinutes = 0;
+
+    for (final session in sessions) {
+      // 休憩セッションは除外し、作業セッションのみカウント
+      if (session['isBreak'] != 1 && session['completed'] == 1) {
+        totalMinutes += (session['durationMinutes'] as int?) ?? 0;
+      }
+    }
+
+    if (totalMinutes == 0) {
+      return '作業時間なし';
+    }
+
+    final hours = totalMinutes ~/ 60;
+    final minutes = totalMinutes % 60;
+
+    if (hours == 0) {
+      return '${minutes}分';
+    } else if (minutes == 0) {
+      return '${hours}時間';
+    } else {
+      return '${hours}時間${minutes}分';
     }
   }
 }

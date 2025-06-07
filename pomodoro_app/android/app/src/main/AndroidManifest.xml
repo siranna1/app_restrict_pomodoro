@@ -38,6 +38,10 @@
             android:name=".AppMonitorService"
             android:enabled="true"
             android:exported="false" />
+        <service
+            android:name=".PomodoroTimerService"
+            android:enabled="true"
+            android:exported="false" />
         <!-- 起動時のレシーバー -->
         <receiver
             android:name=".BootReceiver"
