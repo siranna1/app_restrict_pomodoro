@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:pomodoro_app/services/firebase/auth_service.dart';
 import 'package:pomodoro_app/services/firebase/firebase_rest_service.dart';
 import 'package:pomodoro_app/models/task.dart';
+import '../config/api_config.dart';
 
 /// Firebase REST APIの動作を確認するためのシンプルなテストウィジェット
 class FirebaseRestTest extends StatefulWidget {
@@ -21,8 +22,7 @@ class _FirebaseRestTestState extends State<FirebaseRestTest> {
   String _errorMessage = '';
 
   // Firebase Realtime DBのURL
-  final String _databaseUrl =
-      'https://pomodoroappsync-default-rtdb.asia-southeast1.firebasedatabase.app';
+  final String _databaseUrl = ApiConfig.firebaseDatabaseUrl;
 
   @override
   void initState() {

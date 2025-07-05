@@ -9,6 +9,7 @@ import 'package:flutter/widgets.dart';
 import '../../utils/platform_utils.dart';
 import 'package:collection/collection.dart';
 import '../../utils/platform_utils.dart';
+import '../../config/api_config.dart';
 
 class AuthService {
   final platform = PlatformUtils();
@@ -16,8 +17,7 @@ class AuthService {
   final GoogleSignIn _googleSignIn =
       defaultTargetPlatform == TargetPlatform.windows
           ? GoogleSignIn(
-              clientId:
-                  '931892292987-h6fukl6u7fb18qm2g1d07jdkdirgvi8d.apps.googleusercontent.com',
+              clientId: ApiConfig.googleClientId,
               //scopes: ['email', 'profile'],
             )
           : GoogleSignIn();

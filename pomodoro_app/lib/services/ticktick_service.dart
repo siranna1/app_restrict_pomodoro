@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/task.dart';
+import '../config/api_config.dart';
 
 class TickTickService {
   static final TickTickService _instance = TickTickService._internal();
@@ -24,8 +25,8 @@ class TickTickService {
   Map<String, String> _projectIdToNameMap = {};
 
   // APIキー情報を環境変数や設定から読み込む
-  static String _clientId = "qd8SNKwQ9Z7eY6rBg6";
-  static String _clientSecret = "ugZ9Rh*tiitPi9YZk_g++X@K&s769(86";
+  static String get _clientId => ApiConfig.tickTickClientId;
+  static String get _clientSecret => ApiConfig.tickTickClientSecret;
 
   // 初期化
   Future<void> initialize() async {
@@ -89,8 +90,7 @@ class TickTickService {
           'code': authCode,
           'client_id': _clientId,
           'client_secret': _clientSecret,
-          'redirect_uri':
-              'https://script.google.com/macros/s/AKfycbxkOp3zrER5DR5nwVIzvc4TPkr0MfIRHQAimKMsVv2IdlPz_cSsBJ1hMLI_-H5P3LGF7A/exec',
+          'redirect_uri': ApiConfig.tickTickRedirectUri,
         },
       );
 
