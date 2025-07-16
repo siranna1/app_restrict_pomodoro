@@ -16,6 +16,7 @@ import 'package:uuid/uuid.dart';
 import '../../platforms/android/android_app_controller.dart';
 import '../../platforms/windows/windows_app_controller.dart';
 import 'dart:io';
+import '../../config/api_config.dart';
 
 class SyncService {
   final DatabaseReference _database = FirebaseDatabase.instance.ref();
@@ -27,8 +28,7 @@ class SyncService {
   late FirebaseRestService _restService;
 
   // Firebase Realtime DBのURL
-  final String _databaseUrl =
-      'https://pomodoroappsync-default-rtdb.asia-southeast1.firebasedatabase.app';
+  final String _databaseUrl = ApiConfig.firebaseDatabaseUrl;
 
   SyncService(this._dbHelper, this._settingsService, this._authService) {
     // REST APIサービスを初期化

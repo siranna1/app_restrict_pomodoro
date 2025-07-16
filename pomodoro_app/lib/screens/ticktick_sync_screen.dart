@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../providers/ticktick_provider.dart';
 import '../providers/task_provider.dart';
 import '../widgets/project_selection_dialog.dart';
+import '../config/api_config.dart';
 
 class TickTickSyncScreen extends StatefulWidget {
   const TickTickSyncScreen({Key? key}) : super(key: key);
@@ -27,9 +28,8 @@ class _TickTickSyncScreenState extends State<TickTickSyncScreen> {
   // TickTickの認証ページを開く
   Future<void> _openTickTickAuth() async {
     // 注: 実際のアプリ開発では、クライアントIDを安全に管理してください
-    const clientId = 'qd8SNKwQ9Z7eY6rBg6';
-    const redirectUri =
-        'https://script.google.com/macros/s/AKfycbxkOp3zrER5DR5nwVIzvc4TPkr0MfIRHQAimKMsVv2IdlPz_cSsBJ1hMLI_-H5P3LGF7A/exec';
+    const clientId = ApiConfig.tickTickClientId;
+    const redirectUri = ApiConfig.tickTickRedirectUri;
 
     // TickTickのOAuth2認証ページURL
     final authUrl = Uri.parse(
